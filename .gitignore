@@ -1,0 +1,26 @@
+# Environment secrets — never commit
+.env
+backend/.env
+frontend/.env
+
+# Python
+backend/venv/
+backend/**/__pycache__/
+backend/.pytest_cache/
+*.pyc
+*.pyo
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+
+# Uploaded files (keep folder via .gitkeep)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
