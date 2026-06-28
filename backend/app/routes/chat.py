@@ -41,8 +41,8 @@ def send_chat_message(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     """
-    Send a message to the workspace chat.
-    Phase 2 saves the message and returns a placeholder assistant reply.
+    Send a message and get workspace-aware Gemini response.
+    
     """
     workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
     user_msg, assistant_msg = chat_service.send_message(db, workspace, data.message)

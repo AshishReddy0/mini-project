@@ -12,6 +12,8 @@ class ContentGenerateRequest(BaseModel):
     """Optional topic or prompt — full AI generation comes in Phase 3."""
     topic: str | None = Field(default=None, max_length=500)
     title: str | None = Field(default=None, max_length=255)
+    document_id: UUID | None = None
+    question_count: int | None = Field(default=10, ge=1, le=20)
 
 
 class GeneratedContentResponse(BaseModel):
