@@ -66,7 +66,62 @@ export const api = {
   me: () => apiFetch("/auth/me"),
 
   listWorkspaces: () => apiFetch("/workspaces"),
+  listContent: (workspaceId) =>
+  apiFetch(`/workspaces/${workspaceId}/content`),
 
   createWorkspace: (body) =>
     apiFetch("/workspaces", { method: "POST", body: JSON.stringify(body) }),
+
+  uploadDocument: (workspaceId, file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return apiFetch(`/workspaces/${workspaceId}/documents`, {
+    method: "POST",
+    body: formData,
+  });
+},
+
+generateRevision: (workspaceId, body) =>
+  apiFetch(`/workspaces/${workspaceId}/content/revision`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
+
+generateExam: (workspaceId, body) =>
+  apiFetch(`/workspaces/${workspaceId}/content/exam`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
+
+generateQuiz: (workspaceId, body) =>
+  apiFetch(`/workspaces/${workspaceId}/content/quiz`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
+
+deleteContent: (workspaceId, contentId) =>
+  apiFetch(`/workspaces/${workspaceId}/content/${contentId}`, {
+    method: "DELETE",
+  }),
+
+sendChatMessage: (workspaceId, body) =>
+  apiFetch(`/workspaces/${workspaceId}/chat`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  }),
+
+getChatHistory: (workspaceId) =>
+  apiFetch(`/workspaces/${workspaceId}/chat`),
+
+listDocuments: (workspaceId) =>
+  apiFetch(`/workspaces/${workspaceId}/documents`),
+
+deleteDocument: (workspaceId, documentId) =>
+  apiFetch(`/workspaces/${workspaceId}/documents/${documentId}`, {
+    method: "DELETE",
+  }),
+
+listContent: (workspaceId) =>
+  apiFetch(`/workspaces/${workspaceId}/content`),
 };

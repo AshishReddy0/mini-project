@@ -1,20 +1,14 @@
-# Workspace chat service — stores messages and returns placeholder replies.
-# Phase 3 will replace the stub assistant response with Gemini API output.
+# Workspace-aware AI chat service using Gemini + extracted documents.
 
 from sqlalchemy.orm import Session
 
 from app.models.chat_history import ChatHistory, ChatRole
 from app.models.workspace import Workspace
-
-PHASE_3_CHAT_PLACEHOLDER = (
-    "AI chat is not yet connected. "
-    "Your message was saved. Phase 3 will enable workspace-aware answers "
-    "using the Gemini API and your uploaded study materials."
-)
+from app.services.gemini_service import generate_content
 
 
 def get_chat_history(db: Session, workspace: Workspace) -> list[ChatHistory]:
-    """Return all chat messages for a workspace, oldest first."""
+    """Return all chat messages for a workspace."""
     return (
         db.query(ChatHistory)
         .filter(ChatHistory.workspace_id == workspace.id)
@@ -23,22 +17,58 @@ def get_chat_history(db: Session, workspace: Workspace) -> list[ChatHistory]:
     )
 
 
+def build_workspace_context(workspace: Workspace) -> str:
+    """
+    Collect extracted text from all workspace documents.
+    """
+    text = ""
+
+    for document in workspace.documents:
+        if document.extracted_text:
+            text += document.extracted_text.content + "\n"
+
+    return text
+
+
 def send_message(
-    db: Session, workspace: Workspace, message: str
+    db: Session,
+    workspace: Workspace,
+    message: str,
 ) -> tuple[ChatHistory, ChatHistory]:
     """
-    Save the user's message and a placeholder assistant reply.
-    Returns both messages so the client can display the exchange.
+    Save user message and generate workspace-aware AI reply.
     """
+
     user_message = ChatHistory(
         workspace_id=workspace.id,
         role=ChatRole.USER,
         message=message,
     )
+
+    workspace_context = build_workspace_context(workspace)
+
+    prompt = f"""
+    You are a study assistant.
+
+    Answer ONLY using this study material:
+
+    {workspace_context}
+
+    Student Question:
+    {message}
+
+    Rules:
+    - Be accurate
+    - Be simple
+    - Stay within provided content
+    """
+
+    ai_response = generate_content(prompt)
+
     assistant_message = ChatHistory(
         workspace_id=workspace.id,
         role=ChatRole.ASSISTANT,
-        message=PHASE_3_CHAT_PLACEHOLDER,
+        message=ai_response,
     )
 
     db.add(user_message)

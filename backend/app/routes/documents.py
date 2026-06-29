@@ -40,7 +40,7 @@ async def upload_document(
     current_user: Annotated[User, Depends(get_current_user)],
     file: UploadFile = File(...),
 ):
-    """Upload a PDF document to a workspace."""
+    """Upload a PDF or DOCX document to a workspace."""
     workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
     return await document_service.upload_document(db, workspace, file)
 

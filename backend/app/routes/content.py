@@ -56,9 +56,9 @@ def generate_revision(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ):
-    """Create a revision notes record (placeholder until Phase 3)."""
+    """Create a revision notes record."""
     workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
-    return content_service.create_placeholder_content(
+    return content_service.create_content(
         db, workspace, ContentType.REVISION, data
     )
 
@@ -76,7 +76,7 @@ def generate_exam(
 ):
     """Create an exam answer record (placeholder until Phase 3)."""
     workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
-    return content_service.create_placeholder_content(
+    return content_service.create_content(
         db, workspace, ContentType.EXAM, data
     )
 
@@ -94,6 +94,22 @@ def generate_quiz(
 ):
     """Create a quiz record (placeholder until Phase 3)."""
     workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
-    return content_service.create_placeholder_content(
+    return content_service.create_content(
         db, workspace, ContentType.QUIZ, data
     )
+
+
+@router.delete(
+    "/workspaces/{workspace_id}/content/{content_id}",
+    status_code=204,
+)
+def delete_content(
+    workspace_id: UUID,
+    content_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    workspace = workspace_service.get_workspace_for_user(
+        db, workspace_id, current_user
+    )
+    content_service.delete_content(db, workspace, content_id)

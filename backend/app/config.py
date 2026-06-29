@@ -23,6 +23,8 @@ JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-this-secret-in-production")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))  # 24 hours
 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+print(repr(GEMINI_API_KEY))
 # Local folder where uploaded PDF files are stored
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -31,4 +33,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_SIZE_BYTES = 10 * 1024 * 1024
 
 # Allowed MIME types for document upload in Phase 2 (PDF only)
-ALLOWED_CONTENT_TYPES = {"application/pdf"}
+ALLOWED_CONTENT_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
