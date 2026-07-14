@@ -3,7 +3,8 @@ export default function DocumentPanel({
   handleUploadDocument,
   setSelectedFile,
   documents,
-  handleDeleteDocument
+  handleDeleteDocument,
+  handlePreviewDocument,
 }) {
   return (
     <section className="card">
@@ -24,6 +25,14 @@ export default function DocumentPanel({
         {documents.map((doc) => (
           <li key={doc.id}>
             {doc.filename} ({doc.file_type})
+
+            <button
+              type="button"
+              className="preview-btn"
+              onClick={() => handlePreviewDocument(doc)}
+            >
+              Preview
+            </button>
 
             <button
               type="button"

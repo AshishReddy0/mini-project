@@ -45,5 +45,7 @@ def send_chat_message(
     
     """
     workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
-    user_msg, assistant_msg = chat_service.send_message(db, workspace, data.message)
+    user_msg, assistant_msg = chat_service.send_message(
+        db, workspace, data.message, data.active_node_title, data.active_node_summary
+    )
     return ChatReplyResponse(user_message=user_msg, assistant_message=assistant_msg)

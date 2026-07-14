@@ -74,3 +74,19 @@ def delete_document(
     workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
     document = document_service.get_document(db, workspace, document_id)
     document_service.delete_document(db, document)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/documents/{document_id}/text",
+)
+def get_document_text(
+    workspace_id: UUID,
+    document_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Retrieve the extracted text content of a document."""
+    workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
+    document = document_service.get_document(db, workspace, document_id)
+    content = document.extracted_text.content if document.extracted_text else ""
+    return {"content": content}

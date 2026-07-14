@@ -99,6 +99,24 @@ def generate_quiz(
     )
 
 
+@router.post(
+    "/workspaces/{workspace_id}/content/logic_flow",
+    response_model=GeneratedContentResponse,
+    status_code=201,
+)
+def generate_logic_flow(
+    workspace_id: UUID,
+    data: ContentGenerateRequest,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Create a step-by-step logic/process flow record."""
+    workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
+    return content_service.create_content(
+        db, workspace, ContentType.LOGIC_FLOW, data
+    )
+
+
 @router.delete(
     "/workspaces/{workspace_id}/content/{content_id}",
     status_code=204,

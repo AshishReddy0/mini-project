@@ -1,425 +1,408 @@
-// Minimal connectivity UI for Phase 2 — proves frontend, backend, and DB work together.
-// Full screens (revision, exam, quiz, chat) will be built in Phase 4.
-
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, getToken, setToken } from "./api.js";
 import AuthForm from "./components/AuthForm";
-import WorkspacePanel from "./components/WorkspacePanel";
-import DocumentPanel from "./components/DocumentPanel";
-import ContentPanel from "./components/ContentPanel";
-import ChatPanel from "./components/ChatPanel";
-import QuizPanel from "./components/QuizPanel";
-import ContentHistoryPanel from "./components/ContentHistoryPanel";
+import WorkspaceSidebar from "./components/WorkspaceSidebar";
+import TabManager from "./components/TabManager";
+import AnimatedRoadmap from "./components/AnimatedRoadmap";
+import { BookOpen, Sun, Moon, User, FolderClosed, LogOut, Plus, MessageSquare, FileText, Layers } from "lucide-react";
 
-const defaultForm = {
-  name: "",
-  email: "",
-  password: "",
-  workspaceName: "",
-};
+// Default tab that is always present (pinned, cannot be closed)
+const CHAT_TAB = { id: "chat", type: "chat", label: "Chat", icon: <MessageSquare size={14} /> };
 
 export default function App() {
-  const [form, setForm] = useState(defaultForm);
-  const [apiStatus, setApiStatus] = useState("checking...");
-  const [dbStatus, setDbStatus] = useState("checking...");
+  const [form, setForm] = useState({ name: "", email: "", password: "", workspaceName: "" });
+  const [message, setMessage] = useState("");
+  const [mode, setMode] = useState("login");
   const [user, setUser] = useState(null);
   const [workspaces, setWorkspaces] = useState([]);
-  const [message, setMessage] = useState("");
-  const [mode, setMode] = useState("login"); // login | register
   const [selectedWorkspace, setSelectedWorkspace] = useState(null);
   const [documents, setDocuments] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedDocumentId, setSelectedDocumentId] = useState("");
-  const [generatedContent, setGeneratedContent] = useState("");
-  const [quizData, setQuizData] = useState([]);
-  const [quizScore, setQuizScore] = useState(null);
-  const [showReview, setShowReview] = useState(false);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState({});
-  const [topic, setTopic] = useState("");
-  const [questionCount, setQuestionCount] = useState(10);
   const [loading, setLoading] = useState(false);
-  const [chatInput, setChatInput] = useState("");
+
+  // Theme
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+
+  // Chat state
   const [chatHistory, setChatHistory] = useState([]);
-  const [contentHistory, setContentHistory] = useState([]);
-  
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [activeNodeContext, setActiveNodeContext] = useState(null);
 
-  // Check API and database health on page load
+  // Tab management
+  const [tabs, setTabs] = useState([CHAT_TAB]);
+  const [activeTabId, setActiveTabId] = useState("chat");
+
+  // Roadmap state
+  const [activeNodeId, setActiveNodeId] = useState(null);
+  const [masteries, setMasteries] = useState({});
+  const [roadmapExpanded, setRoadmapExpanded] = useState(false);
+
+  // Roadmap format config — passed to AnimatedRoadmap
+  const [roadmapConfig, setRoadmapConfig] = useState(null);
+
+  const toastRef = useRef(null);
+  function showToast(msg) {
+    setMessage(msg);
+    clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => setMessage(""), 3500);
+  }
+
+  // Apply theme to <html> element
   useEffect(() => {
-    async function checkHealth() {
-      try {
-        const health = await api.health();
-        setApiStatus(health.status);
-      } catch {
-        setApiStatus("unreachable");
-      }
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
 
-      try {
-        const dbHealth = await api.healthDb();
-        setDbStatus(dbHealth.database);
-      } catch {
-        setDbStatus("unreachable");
-      }
-    }
-
-    checkHealth();
-
-    // Restore session if a token was saved earlier
+  // ─── Session restore ────────────────────────────────────────────
+  useEffect(() => {
     if (getToken()) {
-      api
-        .me()
-        .then(setUser)
+      api.me()
+        .then((u) => { setUser(u); loadWorkspaces(); })
         .catch(() => setToken(null));
     }
   }, []);
 
-  function updateField(field, value) {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  }
+  // ─── Auth ───────────────────────────────────────────────────────
+  function updateField(field, val) { setForm((p) => ({ ...p, [field]: val })); }
 
-  async function handleAuth(event) {
-    event.preventDefault();
-    setMessage("");
-
+  async function handleAuth(e) {
+    e.preventDefault();
     try {
       if (mode === "register") {
-        await api.register({
-          name: form.name,
-          email: form.email,
-          password: form.password,
-        });
-        setMessage("Account created. You can log in now.");
+        await api.register({ name: form.name, email: form.email, password: form.password });
+        showToast("Account created — you can log in now.");
         setMode("login");
         return;
       }
-
-      const result = await api.login({
-        email: form.email,
-        password: form.password,
-      });
+      const result = await api.login({ email: form.email, password: form.password });
       setToken(result.access_token);
       const profile = await api.me();
       setUser(profile);
       await loadWorkspaces();
-      setMessage("Logged in successfully.");
-    } catch (error) {
-      setMessage(error.message);
+    } catch (err) {
+      showToast(err.message);
     }
   }
 
-  async function handleCreateWorkspace(event) {
-    event.preventDefault();
-    setMessage("");
+  function handleLogout() {
+    setToken(null);
+    setUser(null);
+    setWorkspaces([]);
+    setSelectedWorkspace(null);
+    setDocuments([]);
+    setChatHistory([]);
+    setTabs([CHAT_TAB]);
+    setActiveTabId("chat");
+    setActiveNodeId(null);
+    setMasteries({});
+    setRoadmapExpanded(false);
+    setRoadmapConfig(null);
+    showToast("Logged out.");
+  }
 
+  // ─── Workspaces ─────────────────────────────────────────────────
+  async function loadWorkspaces() {
+    try {
+      const data = await api.listWorkspaces();
+      setWorkspaces(data);
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  async function handleCreateWorkspace(e) {
+    e.preventDefault();
     try {
       await api.createWorkspace({ name: form.workspaceName });
       updateField("workspaceName", "");
       await loadWorkspaces();
-      setMessage("Workspace created.");
-    } catch (error) {
-      setMessage(error.message);
+      showToast("Workspace created.");
+    } catch (err) {
+      showToast(err.message);
     }
   }
 
-  async function loadWorkspaces() {
-    const data = await api.listWorkspaces();
-    setWorkspaces(data);
-  }
-
-  async function loadDocuments(workspaceId) {
-  try {
-     const docs = await api.listDocuments(workspaceId);
-     setDocuments(docs);
-   } catch (error) {
-     setMessage(error.message);
-  }
- }
-
- async function loadChatHistory(workspaceId) {
-  try {
-    const data = await api.getChatHistory(workspaceId);
-    setChatHistory(data);
-  } catch (error) {
-    setMessage(error.message);
-  }
- }
-
- async function handleSelectWorkspace(workspace) {
-  setSelectedWorkspace(workspace);
-  await loadDocuments(workspace.id);
-  await loadChatHistory(workspace.id);
-  await loadContentHistory(workspace.id);
-  
- }
-
- async function loadContentHistory(workspaceId) {
-  try {
-    const data = await api.listContent(workspaceId);
-    setContentHistory(data);
-  } catch (error) {
-    setMessage(error.message);
-  }
- }
-
- async function handleUploadDocument(event) {
-  event.preventDefault();
-
-  if (!selectedWorkspace || !selectedFile) return;
-
-  try {
-     await api.uploadDocument(selectedWorkspace.id, selectedFile);
-     setMessage("Document uploaded successfully.");
-     setSelectedFile(null);
-     await loadDocuments(selectedWorkspace.id);
-   } catch (error) {
-     setMessage(error.message);
-   }
- }
-
- async function handleGenerateRevision() {
-  if (!selectedWorkspace) return;
-
-  setLoading(true);
-  try {
-    const result = await api.generateRevision(selectedWorkspace.id, {
-      topic,
-      document_id: selectedDocumentId || null,
-    });
-
-    setGeneratedContent(result.content);
-    setMessage("Revision notes generated.");
-
-    await loadContentHistory(selectedWorkspace.id);
-
-    setLoading(false);
-  } catch (error) {
-    setMessage(error.message);
-    setLoading(false);
-  }
-}
-
-async function handleGenerateExam() {
-  if (!selectedWorkspace) return;
-
-  setLoading(true);
-  try {
-    const result = await api.generateExam(selectedWorkspace.id, {
-      topic,
-      document_id: selectedDocumentId || null,
-    });
-
-    setGeneratedContent(result.content);
-    setMessage("Exam content generated.");
-
-    await loadContentHistory(selectedWorkspace.id);
-
-    setLoading(false);
-  } catch (error) {
-    setMessage(error.message);
-    setLoading(false);
-  }
-}
-
-async function handleGenerateQuiz() {
-  if (!selectedWorkspace) return;
-
-  setLoading(true);
-  try {
-    const result = await api.generateQuiz(selectedWorkspace.id, {
-      topic,
-      document_id: selectedDocumentId || null,
-      question_count: questionCount,
-    });
-
-    const parsedQuiz = JSON.parse(result.content);
-
-    setQuizData(parsedQuiz);
-    setCurrentQuestionIndex(0);
-    setUserAnswers({});
-    setGeneratedContent("");
-    
-    await loadContentHistory(selectedWorkspace.id);
-
-    setLoading(false);
-   } catch (error) {
-    setMessage(error.message);
-    setLoading(false);
-  }
- }
-
- function handleSubmitQuiz() {
-  let score = 0;
-
-  quizData.forEach((question, index) => {
-    if (userAnswers[index] === question.answer) {
-      score++;
+  async function handleSelectWorkspace(ws) {
+    setSelectedWorkspace(ws);
+    setTabs([CHAT_TAB]);
+    setActiveTabId("chat");
+    setActiveNodeId(null);
+    setActiveNodeContext(null);
+    setMasteries({});
+    setRoadmapExpanded(false);
+    setRoadmapConfig(null);
+    try {
+      const [docs, chat] = await Promise.all([
+        api.listDocuments(ws.id),
+        api.getChatHistory(ws.id),
+      ]);
+      setDocuments(docs);
+      setChatHistory(chat);
+    } catch (err) {
+      showToast(err.message);
     }
-  });
-
-  setQuizScore({
-    score,
-    total: quizData.length,
-  });
-  setShowReview(true);
- }
-
- async function handleSendChat(event) {
-  event.preventDefault();
-
-  if (!chatInput || !selectedWorkspace) return;
-
-  setLoading(true);
-  try {
-    await api.sendChatMessage(selectedWorkspace.id, {
-      message: chatInput,
-    });
-
-    setChatInput("");
-    await loadChatHistory(selectedWorkspace.id);
-    setLoading(false);
-  } catch (error) {
-    setMessage(error.message);
-    setLoading(false);
   }
- }
 
- async function handleDeleteDocument(documentId) {
-  if (!selectedWorkspace) return;
-
-  try {
-    await api.deleteDocument(selectedWorkspace.id, documentId);
-    setMessage("Document deleted successfully.");
-    await loadDocuments(selectedWorkspace.id);
-  } catch (error) {
-    setMessage(error.message);
+  function handleBackToWorkspaces() {
+    setSelectedWorkspace(null);
+    setDocuments([]);
+    setChatHistory([]);
+    setTabs([CHAT_TAB]);
+    setActiveTabId("chat");
+    setActiveNodeId(null);
+    setActiveNodeContext(null);
+    setRoadmapExpanded(false);
+    setRoadmapConfig(null);
   }
-}
 
- async function handleDeleteContent(contentId) {
-  if (!selectedWorkspace) return;
-
-  try {
-    await api.deleteContent(selectedWorkspace.id, contentId);
-    await loadContentHistory(selectedWorkspace.id);
-    setMessage("Content deleted successfully.");
-  } catch (error) {
-    setMessage(error.message);
+  // ─── Documents ──────────────────────────────────────────────────
+  async function handleAddFile(file) {
+    if (!selectedWorkspace) return;
+    setLoading(true);
+    try {
+      await api.uploadDocument(selectedWorkspace.id, file);
+      const docs = await api.listDocuments(selectedWorkspace.id);
+      setDocuments(docs);
+      showToast("File uploaded successfully.");
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setLoading(false);
+    }
   }
- }
 
-  function handleLogout() {
-  setToken(null);
-  setUser(null);
-  setWorkspaces([]);
-  setSelectedWorkspace(null);
-  setDocuments([]);
-  setSelectedFile(null);
-  setGeneratedContent("");
-  setTopic("");
-  setChatHistory([]);
-  setChatInput("");
-  setMessage("Logged out.");
-}
+  async function handleDeleteFile(docId) {
+    if (!selectedWorkspace) return;
+    try {
+      await api.deleteDocument(selectedWorkspace.id, docId);
+      const docs = await api.listDocuments(selectedWorkspace.id);
+      setDocuments(docs);
+      setTabs((prev) => prev.filter((t) => !(t.type === "document" && t.data?.id === docId)));
+      showToast("File removed.");
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  // ─── Open document as a tab ─────────────────────────────────────
+  async function handleOpenFileTab(doc) {
+    const tabId = `doc-${doc.id}`;
+    if (tabs.find((t) => t.id === tabId)) { setActiveTabId(tabId); return; }
+
+    let extractedText = null;
+    try {
+      const result = await api.getDocumentText(selectedWorkspace.id, doc.id);
+      extractedText = result?.content || null;
+    } catch (_) {}
+
+    setTabs((prev) => [...prev, { id: tabId, type: "document", label: doc.filename, icon: <FileText size={14} />, data: { ...doc, extractedText } }]);
+    setActiveTabId(tabId);
+  }
+
+  // ─── Open node answer as a tab ──────────────────────────────────
+  async function handleOpenNodeTab(node, currentMasteries) {
+    const tabId = `node-${node.id}`;
+    if (currentMasteries) setMasteries(currentMasteries);
+    setActiveNodeId(node.id);
+    setActiveNodeContext({ title: node.title, summary: node.summary });
+
+    if (tabs.find((t) => t.id === tabId)) { setActiveTabId(tabId); return; }
+
+    const pendingTab = {
+      id: tabId, type: "node_answer", label: node.title, icon: <BookOpen size={14} />,
+      data: { nodeId: node.id, title: node.title, summary: node.summary, difficulty: node.difficulty, subPoints: node.sub_points || [], loadingAnswer: true, answer: null },
+    };
+    setTabs((prev) => [...prev, pendingTab]);
+    setActiveTabId(tabId);
+
+    try {
+      const result = await api.getNodeAnswer(selectedWorkspace.id, node.id);
+      setTabs((prev) => prev.map((t) => t.id === tabId ? { ...t, data: { ...t.data, answer: result.answer, loadingAnswer: false } } : t));
+    } catch (err) {
+      setTabs((prev) => prev.map((t) => t.id === tabId ? { ...t, data: { ...t.data, answer: `**Error:** ${err.message}`, loadingAnswer: false } } : t));
+    }
+  }
+
+  // ─── Tab management ─────────────────────────────────────────────
+  function handleTabClose(tabId) {
+    setTabs((prev) => prev.filter((t) => t.id !== tabId));
+    if (activeTabId === tabId) setActiveTabId("chat");
+    if (tabId.startsWith("node-")) {
+      const nodeId = tabId.replace("node-", "");
+      if (activeNodeId === nodeId) { setActiveNodeId(null); setActiveNodeContext(null); }
+    }
+  }
+
+  // ─── Chat ────────────────────────────────────────────────────────
+  async function handleSendChat(e) {
+    e?.preventDefault();
+    if (!chatInput.trim() || !selectedWorkspace) return;
+    setChatLoading(true);
+    try {
+      await api.sendChatMessage(selectedWorkspace.id, {
+        message: chatInput,
+        active_node_title: activeNodeContext?.title || null,
+        active_node_summary: activeNodeContext?.summary || null,
+      });
+      setChatInput("");
+      const data = await api.getChatHistory(selectedWorkspace.id);
+      setChatHistory(data);
+    } catch (err) {
+      showToast(err.message);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  function handleOpenChatWithNode(nodeCtx) {
+    setActiveNodeContext(nodeCtx);
+    setActiveTabId("chat");
+  }
+
+  // ─── Mastery ─────────────────────────────────────────────────────
+  async function handleMarkMastered(nodeId) {
+    try {
+      await api.markNodeMastered(selectedWorkspace.id, nodeId);
+      const graph = await api.getGraph(selectedWorkspace.id);
+      if (graph?.masteries) setMasteries(graph.masteries);
+      showToast("Concept marked as mastered! 🎉");
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
+  // ─── Roadmap expand / config ─────────────────────────────────────
+  function handleRoadmapConfigured(config) {
+    setRoadmapConfig(config);
+    setRoadmapExpanded(true);
+  }
+
+  // ─── Render ──────────────────────────────────────────────────────
   return (
-    <div className="app">
-      <header>
-        <h1>AI Study Companion</h1>
+    <div className="app-container">
+      <header className="app-header">
+        <div className="logo-section">
+          <BookOpen className="app-logo-icon" size={18} style={{ color: "var(--accent)" }} />
+          <h2>AI Study Companion</h2>
+        </div>
+        <div className="header-spacer" />
+        {/* Theme toggle always visible */}
+        <button
+          className="theme-toggle-btn"
+          onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
+          title="Toggle theme"
+        >
+          {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+        {user && (
+          <div className="header-user-chip">
+            <User size={12} /> {user.name}
+          </div>
+        )}
       </header>
 
-      <section className="card">
-        <h2>System Status</h2>
-        <p>
-          API: <span className={apiStatus === "ok" ? "ok" : "error"}>{apiStatus}</span>
-        </p>
-        <p>
-          Database:{" "}
-          <span className={dbStatus === "connected" ? "ok" : "error"}>{dbStatus}</span>
-        </p>
-      </section>
-
       {!user ? (
-        <AuthForm
-          mode={mode}
-          form={form}
-          updateField={updateField}
-          handleAuth={handleAuth}
-          setMode={setMode}
-        /> ): (
-        <>
-          <section className="card">
-            <h2>Welcome, {user.name}</h2>
-            <p>{user.email}</p>
-            <button type="button" onClick={handleLogout}>
-              Logout
-            </button>
-          </section>
+        <div className="auth-container">
+          <AuthForm mode={mode} form={form} updateField={updateField} handleAuth={handleAuth} setMode={setMode} />
+          {message && <p className="message-toast">{message}</p>}
+        </div>
+      ) : !selectedWorkspace ? (
+        /* ─── Workspace Landing ─── */
+        <div className="main-layout">
+          <div className="workspace-landing">
+            <div className="landing-hero">
+              <h2>Your Study Workspaces</h2>
+              <p>Select a subject to continue, or create a new workspace below.</p>
+            </div>
 
-          <WorkspacePanel
-            form={form}
-            updateField={updateField}
-            handleCreateWorkspace={handleCreateWorkspace}
-            loadWorkspaces={loadWorkspaces}
-            workspaces={workspaces}
-            handleSelectWorkspace={handleSelectWorkspace}
-          />
-            {selectedWorkspace && (
-           <>
-          <DocumentPanel
-            selectedWorkspace={selectedWorkspace}
-            handleUploadDocument={handleUploadDocument}
-            setSelectedFile={setSelectedFile}
-            documents={documents}
-            handleDeleteDocument={handleDeleteDocument}
-          />
+            {workspaces.length > 0 && (
+              <div className="workspaces-grid">
+                {workspaces.map((ws) => (
+                  <div key={ws.id} className="workspace-card" onClick={() => handleSelectWorkspace(ws)}>
+                    <div className="workspace-card-icon">
+                      <Layers size={24} style={{ color: "var(--accent)" }} />
+                    </div>
+                    <div className="workspace-card-name">{ws.name}</div>
+                    <div className="workspace-card-meta">Open →</div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-          <ContentPanel
-            topic={topic}
-            setTopic={setTopic}
-            handleGenerateRevision={handleGenerateRevision}
-            handleGenerateExam={handleGenerateExam}
-            handleGenerateQuiz={handleGenerateQuiz}
-            generatedContent={generatedContent}
-            documents={documents}
-            selectedDocumentId={selectedDocumentId}
-            setSelectedDocumentId={setSelectedDocumentId}
-            questionCount={questionCount}
-            setQuestionCount={setQuestionCount}
-          />
+            <form className="create-workspace-section" onSubmit={handleCreateWorkspace}>
+              <input
+                className="create-ws-input"
+                type="text"
+                placeholder="New workspace name (e.g. Operating Systems)"
+                value={form.workspaceName}
+                onChange={(e) => updateField("workspaceName", e.target.value)}
+                required
+              />
+              <button type="submit" className="create-ws-btn">+ Create</button>
+            </form>
 
-          <ContentHistoryPanel 
-            contentHistory={contentHistory} 
-            setGeneratedContent={setGeneratedContent}
-            setQuizData={setQuizData}
-            handleDeleteContent={handleDeleteContent}
-          />
-
-          <QuizPanel
-            quizData={quizData}
-            currentQuestionIndex={currentQuestionIndex}
-            setCurrentQuestionIndex={setCurrentQuestionIndex}
-            userAnswers={userAnswers}
-            setUserAnswers={setUserAnswers}
-            handleSubmitQuiz={handleSubmitQuiz}
-            quizScore={quizScore}
-            showReview={showReview}
-          />
-
-          <ChatPanel
-            chatHistory={chatHistory}
-            chatInput={chatInput}
-            setChatInput={setChatInput}
-            handleSendChat={handleSendChat}
-          />
-        </>
-        )}
-          {loading && (
-          <div className="card">
-          <p>⏳ Processing... Please wait</p>
+            <div style={{ marginTop: 16 }}>
+              <button className="secondary-btn" onClick={handleLogout}>Log out</button>
+            </div>
           </div>
-         )}
-          {message && <p className="message">{message}</p>}
-        </>
+        </div>
+      ) : (
+        /* ─── Three-Column Workspace View ─── */
+        <div className="main-layout">
+          <div className={`workspace-view ${roadmapExpanded ? "roadmap-open" : "roadmap-collapsed"}`}>
+            {/* Left: File sidebar */}
+            <WorkspaceSidebar
+              workspace={selectedWorkspace}
+              documents={documents}
+              activeDocId={tabs.find((t) => t.id === activeTabId && t.type === "document")?.data?.id}
+              onBackClick={handleBackToWorkspaces}
+              onFileClick={handleOpenFileTab}
+              onAddFile={handleAddFile}
+              onDeleteFile={handleDeleteFile}
+              onLogout={handleLogout}
+            />
+
+            {/* Center: Tab Manager */}
+            <TabManager
+              tabs={tabs}
+              activeTabId={activeTabId}
+              onTabClick={setActiveTabId}
+              onTabClose={handleTabClose}
+              chatHistory={chatHistory}
+              chatInput={chatInput}
+              setChatInput={setChatInput}
+              handleSendChat={handleSendChat}
+              chatLoading={chatLoading}
+              activeNodeContext={activeNodeContext}
+              onClearNodeContext={() => setActiveNodeContext(null)}
+              onOpenChatWithNode={handleOpenChatWithNode}
+              onMarkMastered={handleMarkMastered}
+              masteries={masteries}
+            />
+
+            {/* Right: Animated Roadmap */}
+            <AnimatedRoadmap
+              workspaceId={selectedWorkspace.id}
+              documents={documents}
+              activeNodeId={activeNodeId}
+              onNodeClick={handleOpenNodeTab}
+              expanded={roadmapExpanded}
+              onToggleExpand={() => setRoadmapExpanded(e => !e)}
+              roadmapConfig={roadmapConfig}
+              onRoadmapConfigured={handleRoadmapConfigured}
+              onMasteriesUpdate={(m) => setMasteries(m)}
+            />
+          </div>
+        </div>
       )}
+
+      {loading && (
+        <div className="global-loader-toast">
+          <div className="loading-spinner" style={{ width: 20, height: 20, flexShrink: 0 }} />
+          Processing…
+        </div>
+      )}
+      {message && <div className="toast-notification">{message}</div>}
     </div>
   );
 }

@@ -6,6 +6,7 @@ from app.models.extracted_text import ExtractedText
 from app.models.generated_content import GeneratedContent
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.models.concept_graph import ConceptNode, ConceptEdge, NodeMastery
 
 __all__ = [
     "User",
@@ -14,4 +15,7 @@ __all__ = [
     "ExtractedText",
     "GeneratedContent",
     "ChatHistory",
+    "ConceptNode",
+    "ConceptEdge",
+    "NodeMastery",
 ]

@@ -2,16 +2,10 @@
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-/**
- * Read the saved JWT token from browser storage.
- */
 export function getToken() {
   return localStorage.getItem("token");
 }
 
-/**
- * Save or remove the JWT after login/logout.
- */
 export function setToken(token) {
   if (token) {
     localStorage.setItem("token", token);
@@ -20,108 +14,95 @@ export function setToken(token) {
   }
 }
 
-/**
- * Generic fetch wrapper that attaches the auth header when a token exists.
- */
 async function apiFetch(path, options = {}) {
-  const headers = {
-    ...(options.headers || {}),
-  };
-
+  const headers = { ...(options.headers || {}) };
   const token = getToken();
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
+  if (token) headers.Authorization = `Bearer ${token}`;
 
   // Let the browser set multipart boundaries for file uploads
   if (!(options.body instanceof FormData)) {
     headers["Content-Type"] = headers["Content-Type"] || "application/json";
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers,
-  });
+  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
 
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
 
   if (!response.ok) {
-    throw new Error(data?.detail || `Request failed (${response.status})`);
+    let errorMessage = `Request failed (${response.status})`;
+    if (data?.detail) {
+      if (Array.isArray(data.detail)) {
+        errorMessage = data.detail.map(err => `${err.loc[err.loc.length - 1]}: ${err.msg}`).join(", ");
+      } else {
+        errorMessage = data.detail;
+      }
+    }
+    throw new Error(errorMessage);
   }
 
   return data;
 }
 
 export const api = {
-  health: () => apiFetch("/health"),
-  healthDb: () => apiFetch("/health/db"),
-
+  // Auth
   register: (body) =>
     apiFetch("/auth/register", { method: "POST", body: JSON.stringify(body) }),
-
   login: (body) =>
     apiFetch("/auth/login", { method: "POST", body: JSON.stringify(body) }),
-
   me: () => apiFetch("/auth/me"),
 
+  // Workspaces
   listWorkspaces: () => apiFetch("/workspaces"),
-  listContent: (workspaceId) =>
-  apiFetch(`/workspaces/${workspaceId}/content`),
-
   createWorkspace: (body) =>
     apiFetch("/workspaces", { method: "POST", body: JSON.stringify(body) }),
 
+  // Documents
+  listDocuments: (workspaceId) =>
+    apiFetch(`/workspaces/${workspaceId}/documents`),
   uploadDocument: (workspaceId, file) => {
-  const formData = new FormData();
-  formData.append("file", file);
+    const formData = new FormData();
+    formData.append("file", file);
+    return apiFetch(`/workspaces/${workspaceId}/documents`, {
+      method: "POST",
+      body: formData,
+    });
+  },
+  deleteDocument: (workspaceId, documentId) =>
+    apiFetch(`/workspaces/${workspaceId}/documents/${documentId}`, {
+      method: "DELETE",
+    }),
+  getDocumentText: (workspaceId, documentId) =>
+    apiFetch(`/workspaces/${workspaceId}/documents/${documentId}/text`),
 
-  return apiFetch(`/workspaces/${workspaceId}/documents`, {
-    method: "POST",
-    body: formData,
-  });
-},
+  // Chat
+  sendChatMessage: (workspaceId, body) =>
+    apiFetch(`/workspaces/${workspaceId}/chat`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  getChatHistory: (workspaceId) =>
+    apiFetch(`/workspaces/${workspaceId}/chat`),
 
-generateRevision: (workspaceId, body) =>
-  apiFetch(`/workspaces/${workspaceId}/content/revision`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  }),
+  // Concept Graph (Roadmap)
+  generateGraph: (workspaceId, body = {}) =>
+    apiFetch(`/workspaces/${workspaceId}/graph/generate`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  getGraph: (workspaceId) =>
+    apiFetch(`/workspaces/${workspaceId}/graph`),
 
-generateExam: (workspaceId, body) =>
-  apiFetch(`/workspaces/${workspaceId}/content/exam`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  }),
-
-generateQuiz: (workspaceId, body) =>
-  apiFetch(`/workspaces/${workspaceId}/content/quiz`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  }),
-
-deleteContent: (workspaceId, contentId) =>
-  apiFetch(`/workspaces/${workspaceId}/content/${contentId}`, {
-    method: "DELETE",
-  }),
-
-sendChatMessage: (workspaceId, body) =>
-  apiFetch(`/workspaces/${workspaceId}/chat`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  }),
-
-getChatHistory: (workspaceId) =>
-  apiFetch(`/workspaces/${workspaceId}/chat`),
-
-listDocuments: (workspaceId) =>
-  apiFetch(`/workspaces/${workspaceId}/documents`),
-
-deleteDocument: (workspaceId, documentId) =>
-  apiFetch(`/workspaces/${workspaceId}/documents/${documentId}`, {
-    method: "DELETE",
-  }),
-
-listContent: (workspaceId) =>
-  apiFetch(`/workspaces/${workspaceId}/content`),
+  // Node actions
+  getNodeAnswer: (workspaceId, nodeId) =>
+    apiFetch(`/workspaces/${workspaceId}/node/${nodeId}/answer`),
+  markNodeMastered: (workspaceId, nodeId) =>
+    apiFetch(`/workspaces/${workspaceId}/node/${nodeId}/master`, {
+      method: "POST",
+    }),
+  attemptNode: (workspaceId, nodeId, body) =>
+    apiFetch(`/workspaces/${workspaceId}/node/${nodeId}/attempt`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 };

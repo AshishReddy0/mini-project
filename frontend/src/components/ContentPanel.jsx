@@ -67,13 +67,7 @@ export default function ContentPanel({
          </button>
         </div>
 
-        {generatedContent && (
-          <section className="card">
-          <h4>Generated Content</h4>
-          <p>{generatedContent}</p>
-        </section>
-       )}
-     </section>
+      </section>
     </>
   );
 }

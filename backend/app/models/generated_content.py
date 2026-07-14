@@ -15,6 +15,7 @@ class ContentType(str, enum.Enum):
     REVISION = "revision"
     EXAM = "exam"
     QUIZ = "quiz"
+    LOGIC_FLOW = "logic_flow"
 
 
 class GeneratedContent(Base):

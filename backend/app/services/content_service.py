@@ -93,30 +93,40 @@ def create_content(
 
     if content_type == ContentType.REVISION:
         prompt = f"""
-        Create revision notes from:
+        You are an expert academic tutor. Generate a highly structured, comprehensive Revision Guide on the topic "{data.topic}" (or the entire context if no topic is specified) based on this material:
 
         {document_text}
 
-        Rules:
-        - Easy language
-        - Bullet points
-        - Important concepts
-        - Definitions
+        Structure the response using clean Markdown with:
+        - A clear Title (# heading) and Brief Overview.
+        - **Key Concepts & Definitions**: Bold key terms and provide precise, easy-to-understand definitions.
+        - **Main Topics**: Break down the topic using subheadings (##, ###) and bullet points.
+        - **Comparison Tables**: Use Markdown tables where appropriate to compare different concepts or options.
+        - **Takeaways**: A bulleted list of key takeaways at the end.
+
+        Ensure the language is academic yet accessible. Format beautifully and cleanly.
         """
 
     elif content_type == ContentType.EXAM:
         prompt = f"""
-        Generate exam preparation material.
-
-        Text:
+        You are an academic examiner. Generate a structured, solved Exam Preparation Guide on the topic "{data.topic}" (or the entire context if no topic is specified) based on this material:
 
         {document_text}
 
-        Include:
-        1. 2 mark questions
-        2. 5 mark questions
-        3. Long questions
-        4. Important topics
+        Generate high-quality exam-style questions with detailed, structured answers.
+        
+        For EVERY 5-mark and 10-mark question, you MUST generate an **Exam Coaching Box** directly below the question (before the model answer).
+        The coaching box should contain:
+        - **Keywords checklist**: Important technical terms examiners scan for.
+        - **Common Pitfalls**: Frequent mistakes where students lose marks on this topic.
+        - **Suggested Layout Checklist**: Recommended structural outline (e.g. Intro, flow diagram, equations, components, conclusion).
+
+        Required solved questions:
+        1. **2-Mark Questions (Short Answers)**: Precision definitions and single-sentence explanations. (Generate exactly 3 questions with answers)
+        2. **5-Mark Questions (Medium Answers)**: Solved explanations with bullet points and clear examples. Include the Exam Coaching Box. (Generate exactly 2 questions with answers)
+        3. **10-Mark Questions (Long Answers)**: Solved comprehensive answers structured with Introduction, Detailed Explanation, Working, Pros/Cons, and Conclusion. Include the Exam Coaching Box. (Generate exactly 1 question with answer)
+
+        Format the guide using clean Markdown. Use subheadings (##) for each question category, and bold text for questions. Wrap the Exam Coaching Box inside a markdown blockquote (starting with `> `) to make it visually distinct.
         """
 
     elif content_type == ContentType.QUIZ:
@@ -135,15 +145,76 @@ def create_content(
         [
             {{
                 "question": "...",
-                "options": {{"
-                "A": "...",
-                "B": "...",
-                "C": "...",
-                "D": "..."
-               }},
-               "answer": "A"
+                "options": {{
+                  "A": "...",
+                  "B": "...",
+                  "C": "...",
+                  "D": "..."
+                }},
+                "answer": "A"
             }}
         ]
+        """
+
+    elif content_type == ContentType.LOGIC_FLOW:
+        prompt = f"""
+        Analyze the following academic document context:
+
+        {document_text}
+
+        Generate a detailed, step-by-step logic flow or process flow diagram/sequence for the topic: "{data.topic or 'the main process/algorithm described in the text'}".
+
+        Provide a logical sequence of 4 to 10 steps representing the flow of operations, decision points, state transitions, or loops.
+        Define clear step titles, descriptions, types, and branching logic.
+
+        Return ONLY a valid JSON object.
+        Do not add explanation outside the JSON. Do not wrap the JSON in markdown code blocks.
+
+        Format:
+        {{
+          "title": "Overall Logic Flow Title",
+          "description": "Short explanation of the flow and its purpose",
+          "steps": [
+            {{
+              "id": 1,
+              "title": "Step Title",
+              "description": "Clear explanation of what happens in this step, referencing key concepts from the context.",
+              "type": "action",
+              "next_step_id": 2
+            }},
+            {{
+              "id": 2,
+              "title": "Decision Check",
+              "description": "Explain the check or branch condition here.",
+              "type": "condition",
+              "yes_step_id": 3,
+              "no_step_id": 4
+            }},
+            {{
+              "id": 3,
+              "title": "Yes Branch Action",
+              "description": "Explanation of the path taken when condition is met.",
+              "type": "action",
+              "next_step_id": 5
+            }},
+            {{
+              "id": 4,
+              "title": "No Branch Action",
+              "description": "Explanation of the path taken when condition is not met.",
+              "type": "action",
+              "next_step_id": 5
+            }},
+            {{
+              "id": 5,
+              "title": "Ending Step",
+              "description": "Final step or conclusion of the process.",
+              "type": "end"
+            }}
+          ]
+        }}
+
+        Allowed "type" values: "start", "action", "condition", "loop", "end".
+        Make sure all referenced step IDs exist.
         """
 
     generated_text = generate_content(prompt)
@@ -152,6 +223,7 @@ def create_content(
         ContentType.REVISION: "Revision Notes",
         ContentType.EXAM: "Exam Preparation",
         ContentType.QUIZ: "Practice Quiz",
+        ContentType.LOGIC_FLOW: "Logic Flow Diagram",
     }
 
     title = data.title or default_titles[content_type]
