@@ -53,7 +53,8 @@ def get_graph(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     """Retrieve the concept graph nodes, edges, and user mastery statuses."""
-    workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
+    # Clean up duplicate nodes or legacy multi-unit strings in the database
+    graph_service.cleanup_db_workspace_nodes(db, workspace.id)
 
     nodes = (
         db.query(ConceptNode)
@@ -144,15 +145,9 @@ def mark_node_mastered(
         mastery = NodeMastery(
             user_id=current_user.id,
             node_id=node_id,
-            status=MasteryStatus.LOCKED.value
+            status=MasteryStatus.UNLOCKED.value
         )
         db.add(mastery)
-
-    if mastery.status == MasteryStatus.LOCKED.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cannot mark a locked concept as mastered. Complete prerequisites first."
-        )
 
     mastery.status = MasteryStatus.MASTERED.value
     mastery.attempts = (mastery.attempts or 0) + 1
@@ -190,18 +185,9 @@ def attempt_node(
         mastery = NodeMastery(
             user_id=current_user.id,
             node_id=node_id,
-            status=MasteryStatus.LOCKED.value
+            status=MasteryStatus.UNLOCKED.value
         )
         db.add(mastery)
-
-    graph_service.evaluate_mastery_states(db, workspace.id, current_user.id)
-    db.refresh(mastery)
-
-    if mastery.status == MasteryStatus.LOCKED.value:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This concept is locked. Please master prerequisites first."
-        )
 
     mastery.attempts = (mastery.attempts or 0) + 1
 

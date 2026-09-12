@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { ArrowLeft, Plus, Trash2, LogOut, FileText, FileImage, FileCode, FileUp } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, LogOut, FileText, FileImage, FileCode, FileUp, Download } from "lucide-react";
 
 function getFileIcon(filename) {
   const ext = filename?.split(".").pop()?.toLowerCase() || "";
@@ -36,6 +36,19 @@ export default function WorkspaceSidebar({
     e.target.value = "";
   };
 
+  const handleDownloadFile = (e, doc) => {
+    e.stopPropagation();
+    if (!doc?.file_path) return;
+    const fileUrl = `http://127.0.0.1:8000/${doc.file_path.replace(/\\/g, "/")}`;
+    const a = document.createElement("a");
+    a.href = fileUrl;
+    a.download = doc.filename;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   return (
     <aside className="workspace-sidebar">
       {/* Top bar — back button + workspace name */}
@@ -65,14 +78,24 @@ export default function WorkspaceSidebar({
                 {getFileIcon(doc.filename)}
               </span>
               <span className="file-name" title={doc.filename}>{doc.filename}</span>
-              <button
-                className="file-delete-btn"
-                style={{ display: "flex", alignItems: "center" }}
-                onClick={(e) => { e.stopPropagation(); onDeleteFile(doc.id); }}
-                title="Remove file"
-              >
-                <Trash2 size={12} />
-              </button>
+              <div className="file-actions" style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                <button
+                  className="file-delete-btn"
+                  style={{ display: "flex", alignItems: "center" }}
+                  onClick={(e) => handleDownloadFile(e, doc)}
+                  title="Download file"
+                >
+                  <Download size={12} />
+                </button>
+                <button
+                  className="file-delete-btn"
+                  style={{ display: "flex", alignItems: "center" }}
+                  onClick={(e) => { e.stopPropagation(); onDeleteFile(doc.id); }}
+                  title="Remove file"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             </div>
           ))
         )}

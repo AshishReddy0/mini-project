@@ -4,7 +4,9 @@ import AuthForm from "./components/AuthForm";
 import WorkspaceSidebar from "./components/WorkspaceSidebar";
 import TabManager from "./components/TabManager";
 import AnimatedRoadmap from "./components/AnimatedRoadmap";
-import { BookOpen, Sun, Moon, User, FolderClosed, LogOut, Plus, MessageSquare, FileText, Layers } from "lucide-react";
+import FocusTimer from "./components/FocusTimer";
+import WorkspaceAnalytics from "./components/WorkspaceAnalytics";
+import { BookOpen, Sun, Moon, User, FolderClosed, LogOut, Plus, MessageSquare, FileText, Layers, BarChart3 } from "lucide-react";
 
 // Default tab that is always present (pinned, cannot be closed)
 const CHAT_TAB = { id: "chat", type: "chat", label: "Chat", icon: <MessageSquare size={14} /> };
@@ -18,6 +20,13 @@ export default function App() {
   const [selectedWorkspace, setSelectedWorkspace] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Page view state: 'workspace' | 'profile'
+  const [viewPage, setViewPage] = useState("workspace");
+
+  // Focus Timer & Analytics
+  const [focusSeconds, setFocusSeconds] = useState(0);
+  const [graphNodes, setGraphNodes] = useState([]);
 
   // Theme
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
@@ -97,6 +106,8 @@ export default function App() {
     setMasteries({});
     setRoadmapExpanded(false);
     setRoadmapConfig(null);
+    setGraphNodes([]);
+    setViewPage("workspace");
     showToast("Logged out.");
   }
 
@@ -132,12 +143,15 @@ export default function App() {
     setRoadmapExpanded(false);
     setRoadmapConfig(null);
     try {
-      const [docs, chat] = await Promise.all([
+      const [docs, chat, graph] = await Promise.all([
         api.listDocuments(ws.id),
         api.getChatHistory(ws.id),
+        api.getGraph(ws.id).catch(() => null),
       ]);
       setDocuments(docs);
       setChatHistory(chat);
+      if (graph?.nodes) setGraphNodes(graph.nodes);
+      if (graph?.masteries) setMasteries(graph.masteries);
     } catch (err) {
       showToast(err.message);
     }
@@ -153,9 +167,19 @@ export default function App() {
     setActiveNodeContext(null);
     setRoadmapExpanded(false);
     setRoadmapConfig(null);
+    setGraphNodes([]);
+    setShowAnalyticsModal(false);
   }
 
   // ─── Documents ──────────────────────────────────────────────────
+  async function loadDocuments() {
+    if (!selectedWorkspace) return;
+    try {
+      const docs = await api.listDocuments(selectedWorkspace.id);
+      setDocuments(docs);
+    } catch (_) {}
+  }
+
   async function handleAddFile(file) {
     if (!selectedWorkspace) return;
     setLoading(true);
@@ -265,6 +289,7 @@ export default function App() {
       await api.markNodeMastered(selectedWorkspace.id, nodeId);
       const graph = await api.getGraph(selectedWorkspace.id);
       if (graph?.masteries) setMasteries(graph.masteries);
+      if (graph?.nodes) setGraphNodes(graph.nodes);
       showToast("Concept marked as mastered! 🎉");
     } catch (err) {
       showToast(err.message);
@@ -277,6 +302,7 @@ export default function App() {
     setRoadmapExpanded(true);
   }
 
+
   // ─── Render ──────────────────────────────────────────────────────
   return (
     <div className="app-container">
@@ -285,8 +311,10 @@ export default function App() {
           <BookOpen className="app-logo-icon" size={18} style={{ color: "var(--accent)" }} />
           <h2>AI Study Companion</h2>
         </div>
+
         <div className="header-spacer" />
-        {/* Theme toggle always visible */}
+
+        {/* Theme toggle */}
         <button
           className="theme-toggle-btn"
           onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
@@ -294,9 +322,19 @@ export default function App() {
         >
           {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </button>
+
+        {/* Focus Timer on the Right */}
+        {user && <FocusTimer onTimeUpdate={(t) => setFocusSeconds(t)} />}
+
         {user && (
-          <div className="header-user-chip">
-            <User size={12} /> {user.name}
+          <div className="header-user-menu-wrapper">
+            <div
+              className="header-user-chip clickable"
+              onClick={() => setViewPage("profile")}
+              title="Click to view Profile & Mastery Analytics"
+            >
+              <User size={13} /> {user.name}
+            </div>
           </div>
         )}
       </header>
@@ -305,6 +343,17 @@ export default function App() {
         <div className="auth-container">
           <AuthForm mode={mode} form={form} updateField={updateField} handleAuth={handleAuth} setMode={setMode} />
           {message && <p className="message-toast">{message}</p>}
+        </div>
+      ) : viewPage === "profile" ? (
+        <div className="main-layout">
+          <WorkspaceAnalytics
+            user={user}
+            workspace={selectedWorkspace}
+            graphNodes={graphNodes}
+            masteries={masteries}
+            onBack={() => setViewPage("workspace")}
+            onLogout={handleLogout}
+          />
         </div>
       ) : !selectedWorkspace ? (
         /* ─── Workspace Landing ─── */
@@ -378,6 +427,13 @@ export default function App() {
               onOpenChatWithNode={handleOpenChatWithNode}
               onMarkMastered={handleMarkMastered}
               masteries={masteries}
+              workspaceId={selectedWorkspace.id}
+              user={user}
+              workspace={selectedWorkspace}
+              documentsCount={documents.length}
+              graphNodes={graphNodes}
+              focusSeconds={focusSeconds}
+              onLogout={handleLogout}
             />
 
             {/* Right: Animated Roadmap */}
@@ -391,6 +447,8 @@ export default function App() {
               roadmapConfig={roadmapConfig}
               onRoadmapConfigured={handleRoadmapConfigured}
               onMasteriesUpdate={(m) => setMasteries(m)}
+              onDocumentsUpdated={loadDocuments}
+              masteries={masteries}
             />
           </div>
         </div>

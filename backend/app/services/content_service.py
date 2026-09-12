@@ -217,7 +217,8 @@ def create_content(
         Make sure all referenced step IDs exist.
         """
 
-    generated_text = generate_content(prompt)
+    needs_json = content_type in (ContentType.QUIZ, ContentType.LOGIC_FLOW)
+    generated_text = generate_content(prompt, expect_json=needs_json)
 
     default_titles = {
         ContentType.REVISION: "Revision Notes",

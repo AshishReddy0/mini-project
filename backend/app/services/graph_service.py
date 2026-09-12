@@ -61,6 +61,57 @@ def detect_and_resolve_cycles(nodes_data: list) -> list:
 
     return nodes_data
 
+def clean_unit_name(u_str: str | None) -> str:
+    if not u_str:
+        return "Unit 1"
+    import re
+    match = re.search(r'unit\s*(\d+)', u_str, re.IGNORECASE)
+    if match:
+        return f"Unit {match.group(1)}"
+    cleaned = re.sub(r'[:\-].*$', '', u_str).strip()
+    return cleaned if cleaned else "Unit 1"
+
+def cleanup_db_workspace_nodes(db: Session, workspace_id: UUID):
+    """
+    Clean up database concept nodes for a workspace:
+    1. Normalize unit_ref strings in DB (e.g. 'Unit 1,3' -> 'Unit 1', 'Unit 2: Intro' -> 'Unit 2').
+    2. Remove duplicate concept nodes with identical titles.
+    """
+    nodes = (
+        db.query(ConceptNode)
+        .filter(ConceptNode.workspace_id == workspace_id)
+        .order_by(ConceptNode.order_hint.asc(), ConceptNode.created_at.asc())
+        .all()
+    )
+    if not nodes:
+        return
+
+    seen_titles = set()
+    nodes_to_delete = []
+    modified = False
+
+    for node in nodes:
+        t_clean = node.title.strip().lower()
+        if t_clean in seen_titles:
+            nodes_to_delete.append(node)
+            modified = True
+            continue
+
+        seen_titles.add(t_clean)
+
+        c_unit = clean_unit_name(node.unit_ref)
+        if node.unit_ref != c_unit:
+            node.unit_ref = c_unit
+            modified = True
+
+    if nodes_to_delete:
+        for dn in nodes_to_delete:
+            db.delete(dn)
+        modified = True
+
+    if modified:
+        db.commit()
+
 def generate_concept_graph(
     db: Session,
     workspace: Workspace,
@@ -77,27 +128,78 @@ def generate_concept_graph(
     custom_format: free-text style instruction applied to every node answer.
     portion_text: user-pasted syllabus/portion text, prepended to document context.
     """
-    # 1. Collect context
+    # 1. Collect context directly from database records with fallbacks
+    from app.models.document import Document
+    from app.models.extracted_text import ExtractedText
+
     document_text = ""
     if document_id:
-        selected_doc = None
-        for doc in workspace.documents:
-            if doc.id == document_id:
-                selected_doc = doc
-                break
-        if selected_doc and selected_doc.extracted_text:
-            document_text = selected_doc.extracted_text.content
-    else:
-        for doc in workspace.documents:
-            if doc.extracted_text:
-                document_text += doc.extracted_text.content + "\n"
+        ext = db.query(ExtractedText).filter(ExtractedText.document_id == document_id).first()
+        if ext and ext.content and ext.content.strip():
+            document_text = ext.content
 
-    # Prepend user-pasted portion text if provided
+    # If document_id text was empty or not specified, aggregate all extracted text in workspace
+    if not document_text.strip():
+        all_docs = db.query(Document).filter(Document.workspace_id == workspace.id).all()
+        doc_ids = [d.id for d in all_docs]
+        if doc_ids:
+            exts = db.query(ExtractedText).filter(ExtractedText.document_id.in_(doc_ids)).all()
+            for e in exts:
+                if e.content and e.content.strip():
+                    document_text += e.content + "\n"
+
+    # Prepend user-pasted portion text if provided AND store it permanently as a Workspace Document
     if portion_text and portion_text.strip():
+        import uuid
+        from pathlib import Path
+
+        upload_dir = Path("uploads")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        file_path_str = f"uploads/syllabus_portion_{uuid.uuid4().hex[:8]}.txt"
+        with open(file_path_str, "w", encoding="utf-8") as f:
+            f.write(portion_text.strip())
+
+        existing_portion_docs = [
+            d for d in workspace.documents if d.filename.startswith("Syllabus_Portion")
+        ]
+        doc_name = (
+            f"Syllabus_Portion_{len(existing_portion_docs) + 1}.txt"
+            if existing_portion_docs
+            else "Syllabus_Portion.txt"
+        )
+
+        syllabus_doc = Document(
+            workspace_id=workspace.id,
+            filename=doc_name,
+            file_type="txt",
+            file_path=file_path_str,
+            file_size=len(portion_text.strip().encode("utf-8")),
+        )
+        db.add(syllabus_doc)
+        db.commit()
+        db.refresh(syllabus_doc)
+
+        extracted = ExtractedText(
+            document_id=syllabus_doc.id,
+            content=portion_text.strip(),
+        )
+        db.add(extracted)
+        db.commit()
+        db.refresh(workspace)
+
         document_text = f"[USER-DEFINED PORTION / SYLLABUS]\n{portion_text.strip()}\n\n[REFERENCE MATERIAL]\n{document_text}"
 
     if not document_text.strip():
-        raise ValueError("Please upload some study materials or paste your portion text first.")
+        raise ValueError("No readable text found in your uploaded file or syllabus. Please ensure your file contains extractable text or paste your portion text directly.")
+
+    # Collect existing workspace concepts to prevent duplicates
+    existing_nodes = db.query(ConceptNode).filter(ConceptNode.workspace_id == workspace.id).all()
+    existing_titles = [n.title for n in existing_nodes]
+    existing_title_set = {n.title.lower().strip() for n in existing_nodes}
+
+    existing_note = ""
+    if existing_titles:
+        existing_note = f"\nIMPORTANT DEDUPLICATION RULE: The workspace already contains these concepts: {json.dumps(existing_titles)}. DO NOT extract or duplicate any of these existing concepts. Extract ONLY NEW, additional unique concepts introduced in this portion."
 
     # Build format instruction block for the prompt
     FORMAT_LABELS = {
@@ -117,71 +219,75 @@ def generate_concept_graph(
     if custom_format:
         format_note += f"\nAdditional style instruction: {custom_format}"
 
-    # 2. Call Gemini — request nodes WITH sub_points and format instructions
+    # 2. Call Gemini — request nodes WITH sub_points and format instruction
     prompt = f"""
-    Analyze the following syllabus or textbook context:
+    Analyze the following syllabus, course material, or Q-bank context:
 
     {document_text[:120000]}
 
-    Create a structured Concept Dependency Graph (DAG) for studying this subject.
-    Extract a comprehensive list of 8 to 20 key concepts/topics.
-    For each concept, provide:
-    - title: The concept name
-    - summary: A 1-2 sentence overview of the concept
+    Extract a comprehensive list of 5 to 15 key concepts/questions for studying this subject.
+    {existing_note}
+    
+    For each item, provide:
+    - title: The concept name or question title
+    - summary: A 1-2 sentence overview or answer summary
+    - category: "LAQ" (Long Answer Question / 10 Marks), "SAQ" (Short Answer Question / 2-5 Marks), or "Concept" (Core Concept)
     - difficulty: "easy", "medium", or "hard"
     - prerequisites: list of concept titles that MUST be learned before this one
-    - unit_ref: the unit or chapter this concept belongs to (if apparent)
+    - unit_ref: MUST be a single clean unit string for ONE unit only (e.g. "Unit 1" or "Unit 2"). DO NOT join multiple units like "Unit 1,3" or "Unit 1 and 2". If a concept spans multiple units, assign it to the primary unit.
     - sub_points: a list of 3 to 6 sub-topics or key bullet points about this concept.
-      Each sub_point must have a "title" (short label, e.g. "Types of Scheduling") and a
-      "description" (1-2 sentence explanation of that sub-topic, referenced from the source material).
+      Each sub_point must have a "title" (short label) and a "description" (1-2 sentence explanation).
     {format_note}
-    Ensure prerequisites point ONLY to other concepts in this list. Avoid circular dependencies.
-    Make sub_points specific, accurate, and directly derived from the provided material.
+    Ensure prerequisites point ONLY to other concepts in this list or existing workspace concepts. Avoid circular dependencies.
 
     Return ONLY a valid JSON array of objects. No markdown, no extra text.
 
     Format:
     [
       {{
-        "title": "Concept Title",
+        "title": "Concept Title or Question",
         "summary": "1-2 sentence overview.",
+        "category": "LAQ",
         "difficulty": "medium",
         "prerequisites": ["Prerequisite Title A"],
-        "unit_ref": "Unit 1: Introduction",
+        "unit_ref": "Unit 1",
         "sub_points": [
-          {{"title": "Sub-topic Name", "description": "Explanation of this sub-topic from the material."}},
-          {{"title": "Another Sub-topic", "description": "Explanation."}}
+          {{"title": "Sub-topic Name", "description": "Explanation."}}
         ]
       }}
     ]
     """
 
-    ai_response = generate_content(prompt)
+    ai_response = generate_content(prompt, expect_json=True)
     raw_nodes = parse_json_from_ai(ai_response)
 
     # Cycle check and cleanup
     clean_nodes = detect_and_resolve_cycles(raw_nodes)
 
-    # Delete existing nodes and edges in the workspace
-    existing_nodes = db.query(ConceptNode).filter(ConceptNode.workspace_id == workspace.id).all()
-    for n in existing_nodes:
-        db.delete(n)
-    db.commit()
+    # Filter out any duplicate nodes that match existing titles
+    unique_new_nodes = []
+    for node_data in clean_nodes:
+        t_clean = node_data["title"].lower().strip()
+        if t_clean not in existing_title_set:
+            existing_title_set.add(t_clean)
+            unique_new_nodes.append(node_data)
 
-    # Save new nodes (including sub_points)
+    # Save new unique nodes (preserving existing nodes)
+    start_order = len(existing_nodes)
     db_nodes = []
-    title_to_node_map = {}
 
-    for idx, node_data in enumerate(clean_nodes):
+    for idx, node_data in enumerate(unique_new_nodes):
+        # Store category in difficulty or sub_points metadata if needed
+        difficulty_val = node_data.get("category") or node_data.get("difficulty", "medium")
+        unit_val = clean_unit_name(node_data.get("unit_ref"))
         node = ConceptNode(
             workspace_id=workspace.id,
             title=node_data["title"],
             summary=node_data["summary"],
-            difficulty=node_data.get("difficulty", "medium"),
-            unit_ref=node_data.get("unit_ref"),
-            order_hint=idx,
+            difficulty=difficulty_val,
+            unit_ref=unit_val,
+            order_hint=start_order + idx,
             sub_points=node_data.get("sub_points", []),
-            # answer_cache starts as None — generated on first click
             answer_cache=None,
         )
         db.add(node)
@@ -189,30 +295,58 @@ def generate_concept_graph(
 
     db.commit()
 
-    # Map title to node for creating edges
-    for node in db_nodes:
-        title_to_node_map[node.title.lower().strip()] = node
+    # Re-fetch all workspace nodes to generate edges
+    all_workspace_nodes = db.query(ConceptNode).filter(ConceptNode.workspace_id == workspace.id).all()
+    title_to_node_map = {n.title.lower().strip(): n for n in all_workspace_nodes}
 
-    # Save edges
-    for idx, node_data in enumerate(clean_nodes):
-        target_node = db_nodes[idx]
+    # Save edges for new nodes
+    for node_data in unique_new_nodes:
+        t_clean = node_data["title"].lower().strip()
+        target_node = title_to_node_map.get(t_clean)
+        if not target_node:
+            continue
         prereqs = node_data.get("prerequisites", [])
         for prereq_title in prereqs:
             source_node = title_to_node_map.get(prereq_title.lower().strip())
             if source_node and source_node.id != target_node.id:
-                edge = ConceptEdge(
-                    from_node_id=source_node.id,
-                    to_node_id=target_node.id,
-                    relation="prerequisite"
-                )
-                db.add(edge)
+                # Check if edge already exists
+                existing_edge = db.query(ConceptEdge).filter(
+                    ConceptEdge.from_node_id == source_node.id,
+                    ConceptEdge.to_node_id == target_node.id
+                ).first()
+                if not existing_edge:
+                    edge = ConceptEdge(
+                        from_node_id=source_node.id,
+                        to_node_id=target_node.id
+                    )
+                    db.add(edge)
 
     db.commit()
 
     # Re-evaluate mastery states for the workspace owner
     evaluate_mastery_states(db, workspace.id, workspace.user_id)
 
-    return {"status": "success", "nodes_count": len(db_nodes)}
+    return get_graph_dict(db, workspace.id)
+
+
+def get_graph_dict(db: Session, workspace_id: UUID) -> dict:
+    """Retrieve all nodes, edges, and masteries for a workspace as a plain dict."""
+    cleanup_db_workspace_nodes(db, workspace_id)
+    nodes = (
+        db.query(ConceptNode)
+        .filter(ConceptNode.workspace_id == workspace_id)
+        .order_by(ConceptNode.order_hint.asc())
+        .all()
+    )
+    node_ids = [n.id for n in nodes]
+    edges = db.query(ConceptEdge).filter(ConceptEdge.from_node_id.in_(node_ids)).all()
+    masteries = db.query(NodeMastery).filter(NodeMastery.node_id.in_(node_ids)).all()
+    mastery_map = {str(m.node_id): m for m in masteries}
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "masteries": mastery_map
+    }
 
 def evaluate_mastery_states(db: Session, workspace_id: UUID, user_id: UUID):
     """
@@ -299,7 +433,7 @@ def grade_explanation(concept_title: str, concept_summary: str, student_explanat
     }}
     """
     
-    response_text = generate_content(prompt)
+    response_text = generate_content(prompt, expect_json=True)
     return parse_json_from_ai(response_text)
 
 def generate_node_quiz(db: Session, node: ConceptNode) -> list:
@@ -329,7 +463,7 @@ def generate_node_quiz(db: Session, node: ConceptNode) -> list:
       }}
     ]
     """
-    response_text = generate_content(prompt)
+    response_text = generate_content(prompt, expect_json=True)
     return parse_json_from_ai(response_text)
 
 
@@ -371,17 +505,14 @@ def generate_node_answer(db: Session, node: ConceptNode, workspace: Workspace) -
     Reference Material:
     {document_text}
 
-    Generate a comprehensive, well-structured study reference answer for this concept.
-    The answer should be deeply rooted in the reference material provided.
+    Generate a concise, direct, high-yield study reference answer for this concept.
 
     Structure the response using clean Markdown:
-    1. **Overview** — expand the summary into 2-3 sentences giving full context
-    2. **Key Sub-topics** — for each sub-point, a paragraph with explanation and any relevant details, formulas, or examples from the source
-    3. **How It Works / Process** — explain mechanisms, algorithms, or workflows if applicable
-    4. **Key Terms** — a small table or bullet list of important vocabulary with definitions
-    5. **Common Exam Points** — 2-3 bullet points on what examiners typically ask about this concept
+    1. **Core Definition & Overview** — 2-3 concise sentences explaining the concept directly.
+    2. **Key Concepts & Working** — bullet points of the main sub-topics and mechanisms (short & focused).
+    3. **Quick Exam Points** — 2-3 short bullet points on essential formulas, differences, or exam takeaways.
 
-    Write clearly and precisely. Use tables where helpful. Use code blocks for any algorithms or pseudocode.
+    IMPORTANT: Keep the response concise, clear, and direct. Avoid unnecessary fluff or overly long paragraphs.
     """
 
     answer = generate_content(prompt)

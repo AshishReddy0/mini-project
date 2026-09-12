@@ -65,18 +65,36 @@ async def upload_document(db: Session, workspace, file: UploadFile):
 
     extracted_content = ""
 
-    # Phase 3 extraction logic
+    # Text extraction based on file type with fallbacks
     if file_type == "pdf":
         from app.services.pdf_service import extract_pdf_text
         extracted_content = extract_pdf_text(file_path)
 
-    elif file_type == "docx":
-        from app.services.docx_service import extract_docx_text
-        extracted_content = extract_docx_text(file_path)
+    elif file_type in ["docx", "doc"]:
+        try:
+            from app.services.docx_service import extract_docx_text
+            extracted_content = extract_docx_text(file_path)
+        except Exception:
+            extracted_content = ""
+
+    elif file_type == "txt":
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                extracted_content = f.read()
+        except Exception:
+            extracted_content = ""
+
+    # Universal fallback if extracted_content is still empty
+    if not extracted_content or not extracted_content.strip():
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                extracted_content = f.read()
+        except Exception:
+            pass
 
     extracted_text = ExtractedText(
         document_id=document.id,
-        content=extracted_content,
+        content=extracted_content or "",
     )
 
     db.add(extracted_text)

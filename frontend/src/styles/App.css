@@ -1245,14 +1245,16 @@ body {
 }
 
 .roadmap-node-card.mastered {
-  background: var(--node-mastered);
-  border-color: var(--success);
+  background: rgba(16, 185, 129, 0.14) !important;
+  border: 1.5px solid var(--success) !important;
   cursor: pointer;
-  box-shadow: 0 0 10px rgba(16,185,129,0.12);
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.25) !important;
 }
 
 .roadmap-node-card.mastered:hover {
+  background: rgba(16, 185, 129, 0.22) !important;
   transform: translateX(3px);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35) !important;
 }
 
 .roadmap-node-card.active {
@@ -1873,4 +1875,488 @@ body {
   color: var(--text-muted);
   font-weight: 700;
 }
+
+/* =====================================================
+   Focus Timer Header Widget & Popover
+   ===================================================== */
+.focus-timer-header-widget {
+  position: relative;
+  margin: 0 auto;
+}
+
+.timer-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-main);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.timer-pill:hover {
+  border-color: var(--primary);
+  background: var(--bg-card-hover);
+}
+
+.timer-icon.pulsing {
+  color: var(--accent);
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.7; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.timer-display-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+}
+
+.timer-mode-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.timer-inline-play {
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.timer-popover {
+  position: absolute;
+  top: 42px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 16px;
+  width: 240px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  z-index: 1000;
+}
+
+.timer-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.timer-popover-header h4 {
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.timer-mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-sidebar);
+  padding: 3px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.mode-tab {
+  flex: 1;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.mode-tab.active {
+  background: var(--bg-card);
+  color: var(--text-main);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.timer-big-display {
+  font-size: 2.2rem;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  text-align: center;
+  color: var(--accent);
+  margin: 12px 0 18px 0;
+}
+
+.timer-controls-row {
+  display: flex;
+  gap: 8px;
+}
+
+.timer-action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+}
+
+.timer-action-btn.primary {
+  background: var(--primary);
+  color: white;
+}
+
+.timer-action-btn.secondary {
+  background: var(--bg-sidebar);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+}
+
+/* =====================================================
+   Voice Input Button
+   ===================================================== */
+.voice-input-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.voice-input-btn:hover {
+  color: var(--accent);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.voice-input-btn.listening {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+  animation: pulse 1.2s infinite;
+}
+
+/* =====================================================
+   Markdown Action Toolbar (Export & TTS)
+   ===================================================== */
+.markdown-container-wrapper {
+  position: relative;
+}
+
+.markdown-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.markdown-action-btn {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  font-size: 0.72rem;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.markdown-action-btn:hover {
+  border-color: var(--primary);
+  color: var(--accent);
+  background: var(--bg-card-hover);
+}
+
+.markdown-action-btn.speaking {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
+  color: #ef4444;
+}
+
+/* =====================================================
+   Document Viewer PDF Iframe & Split View Toggle
+   ===================================================== */
+.doc-viewer-container {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.doc-view-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.toggle-btn {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.toggle-btn.active {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.doc-pdf-iframe {
+  border: none;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  background: #1e293b;
+  border-radius: 8px;
+}
+
+/* =====================================================
+   Analytics Header Button & Modal
+   ===================================================== */
+.analytics-header-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.analytics-header-btn:hover {
+  background: rgba(99, 102, 241, 0.22);
+}
+
+.analytics-modal-card {
+  width: 600px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.analytics-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.analytics-banner-card {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(139, 92, 246, 0.15));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.analytics-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.stat-label {
+  font-size: 0.78rem;
+  color: var(--text-sub);
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 4px 0 0 0;
+}
+
+.stat-icon-gold {
+  color: #f59e0b;
+}
+
+.progress-bar-container {
+  height: 8px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  overflow: hidden;
+  margin: 14px 0 6px 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #10b981);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.progress-subtext {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.analytics-mini-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.mini-stat-card {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mini-stat-num {
+  font-size: 1.1rem;
+  font-weight: 700;
+  display: block;
+  color: var(--text-main);
+}
+
+.mini-stat-lbl {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.weak-nodes-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.weak-node-chip {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* =====================================================
+   Semantic Answer Evaluator Card
+   ===================================================== */
+.semantic-evaluator-card {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 18px;
+  margin: 16px 40px;
+}
+
+.evaluator-header h4 {
+  margin: 0 0 4px 0;
+  font-size: 0.92rem;
+  color: var(--accent);
+}
+
+.evaluator-sub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.evaluator-form {
+  margin-top: 12px;
+}
+
+.eval-input-wrapper {
+  position: relative;
+}
+
+.eval-textarea {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  color: var(--text-main);
+  padding: 10px 40px 10px 12px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  resize: vertical;
+}
+
+.eval-input-actions {
+  position: absolute;
+  right: 8px;
+  bottom: 12px;
+}
+
+.eval-result-box {
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+
+.eval-result-box.passed {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
+.eval-result-box.needs-work {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.eval-score-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.score-num {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.score-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
 

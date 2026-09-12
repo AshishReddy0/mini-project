@@ -29,6 +29,8 @@ export default function AnimatedRoadmap({
   roadmapConfig,
   onRoadmapConfigured,
   onMasteriesUpdate,
+  onDocumentsUpdated,
+  masteries,
 }) {
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -48,7 +50,7 @@ export default function AnimatedRoadmap({
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    if (workspaceId && roadmapConfig) loadGraph();
+    if (workspaceId) loadGraph();
   }, [workspaceId]);
 
   const loadGraph = async () => {
@@ -84,26 +86,16 @@ export default function AnimatedRoadmap({
     setPortionFile(file);
   };
 
-  const handlePortionNext = () => {
+  const [filterMode, setFilterMode] = useState("all"); // 'all' | 'undone' | 'mastered'
+  const [groupByUnit, setGroupByUnit] = useState(false);
+
+  const handlePortionSubmit = async () => {
     const hasFile = portionFile || portionDocId || portionText.trim();
     if (!hasFile) {
       setPortionFileError("Please upload a file, select an existing material, or paste your portion text.");
       return;
     }
     setPortionFileError("");
-    setSetupStep("format");
-  };
-
-  const handleFormatConfirm = async () => {
-    const config = {
-      portionDocId: portionDocId || null,
-      portionText: portionText.trim() || null,
-      portionFile: portionFile || null,
-      formats: selectedFormats,
-      customFormat: customFormat.trim() || null,
-    };
-
-    onRoadmapConfigured(config);
 
     let uploadedDocId = portionDocId || null;
     if (portionFile) {
@@ -123,91 +115,108 @@ export default function AnimatedRoadmap({
     try {
       await api.generateGraph(workspaceId, {
         document_id: uploadedDocId || null,
-        answer_formats: selectedFormats,
-        custom_format: customFormat.trim() || null,
         portion_text: portionText.trim() || null,
       });
       await loadGraph();
+      if (onDocumentsUpdated) {
+        await onDocumentsUpdated();
+      }
       setSetupStep("done");
+      setPortionFile(null);
+      setPortionText("");
+      setPortionDocId("");
     } catch (err) {
-      setError(err.message || "Failed to generate roadmap");
+      setError(err.message || "Failed to generate concepts");
     } finally {
       setGenerating(false);
     }
   };
 
-  const toggleFormat = (id) => {
-    setSelectedFormats((prev) =>
-      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
-    );
-  };
+  const [selectedUnitTab, setSelectedUnitTab] = useState("all");
 
   const orderedNodes = graphData?.nodes
     ? [...graphData.nodes].sort((a, b) => (a.order_hint ?? 0) - (b.order_hint ?? 0))
     : [];
 
-  const masteredCount = orderedNodes.filter(
-    (n) => graphData?.masteries?.[n.id]?.status === "mastered"
-  ).length;
-  const progress = orderedNodes.length > 0 ? masteredCount / orderedNodes.length : 0;
+  function getSingleUnits(unitRef) {
+    if (!unitRef) return ["Unit 1"];
+    const parts = unitRef.split(/[,&]|\band\b/i).map((s) => s.trim()).filter(Boolean);
+    const cleaned = parts.map((p) => {
+      const match = p.match(/unit\s*(\d+)/i);
+      if (match) {
+        return `Unit ${match[1]}`;
+      }
+      return p.replace(/[:\-].*$/, "").trim();
+    }).filter(Boolean);
+    return Array.from(new Set(cleaned));
+  }
+
+  const availableUnits = Array.from(
+    new Set(orderedNodes.flatMap((n) => getSingleUnits(n.unit_ref)))
+  ).sort((a, b) => {
+    const numA = parseInt(a.replace(/\D/g, "")) || 0;
+    const numB = parseInt(b.replace(/\D/g, "")) || 0;
+    return numA - numB || a.localeCompare(b);
+  });
 
   const getMasteryStatus = (nodeId) =>
-    graphData?.masteries?.[nodeId]?.status || "locked";
+    masteries?.[nodeId]?.status || graphData?.masteries?.[nodeId]?.status || "locked";
 
-  const isConnectorFilled = (index) => {
-    if (index === 0) return false;
-    return getMasteryStatus(orderedNodes[index - 1].id) === "mastered";
-  };
+  const filteredNodes = orderedNodes.filter((node) => {
+    const status = getMasteryStatus(node.id);
+    if (filterMode === "undone" && status === "mastered") return false;
+    if (filterMode === "mastered" && status !== "mastered") return false;
+    if (selectedUnitTab !== "all") {
+      const nodeUnits = getSingleUnits(node.unit_ref);
+      if (!nodeUnits.includes(selectedUnitTab)) return false;
+    }
+    return true;
+  });
+
+  // Category division (LAQ, SAQ, Concept)
+  const laqNodes = filteredNodes.filter(
+    (n) => n.difficulty?.toUpperCase() === "LAQ" || n.title.toLowerCase().includes("10 mark") || n.title.toLowerCase().includes("long")
+  );
+  const saqNodes = filteredNodes.filter(
+    (n) => n.difficulty?.toUpperCase() === "SAQ" || n.title.toLowerCase().includes("5 mark") || n.title.toLowerCase().includes("2 mark") || n.title.toLowerCase().includes("short")
+  );
+  const coreNodes = filteredNodes.filter(
+    (n) => !laqNodes.includes(n) && !saqNodes.includes(n)
+  );
+
+  const masteredCount = orderedNodes.filter(
+    (n) => getMasteryStatus(n.id) === "mastered"
+  ).length;
 
   const handleNodeClick = (node, index) => {
-    const status = getMasteryStatus(node.id);
-    if (status === "locked") return;
     setCurrentNodeIndex(index);
-    setExpandedNodeId((prev) => (prev === node.id ? null : node.id));
-    onNodeClick(node, graphData?.masteries);
+    onNodeClick(node, masteries || graphData?.masteries);
   };
 
   const goPrev = () => {
     const idx = Math.max(0, currentNodeIndex - 1);
     setCurrentNodeIndex(idx);
-    const node = orderedNodes[idx];
+    const node = filteredNodes[idx];
     if (node) {
-      setExpandedNodeId(node.id);
-      onNodeClick(node, graphData?.masteries);
+      onNodeClick(node, masteries || graphData?.masteries);
     }
   };
 
   const goNext = () => {
-    const idx = Math.min(orderedNodes.length - 1, currentNodeIndex + 1);
+    const idx = Math.min(filteredNodes.length - 1, currentNodeIndex + 1);
     setCurrentNodeIndex(idx);
-    const node = orderedNodes[idx];
+    const node = filteredNodes[idx];
     if (node) {
-      setExpandedNodeId(node.id);
-      onNodeClick(node, graphData?.masteries);
+      onNodeClick(node, masteries || graphData?.masteries);
     }
-  };
-
-  const handleRebuild = () => {
-    setSetupStep("file");
-    setPortionDocId("");
-    setPortionText("");
-    setPortionFile(null);
-    setPortionFileError("");
-    setSelectedFormats([]);
-    setCustomFormat("");
-    setGraphData(null);
-    onRoadmapConfigured(null);
   };
 
   if (!expanded) {
     return (
-      <div className="roadmap-panel roadmap-panel-collapsed" onClick={onToggleExpand} title="Open Prep Roadmap">
+      <div className="roadmap-panel roadmap-panel-collapsed" onClick={onToggleExpand} title="Open Concept Syllabus">
         <div className="roadmap-collapsed-label">
           <Map size={16} />
-          <span className="roadmap-collapsed-text">Roadmap</span>
-          {graphData && orderedNodes.length > 0 && (
-            <span className="roadmap-mini-progress">{masteredCount}/{orderedNodes.length}</span>
-          )}
+          <span className="roadmap-collapsed-text">Concept Syllabus</span>
           <ChevronLeft size={16} className="roadmap-expand-arrow" />
         </div>
       </div>
@@ -219,12 +228,12 @@ export default function AnimatedRoadmap({
       <div className="roadmap-header">
         <div className="roadmap-title-row">
           <span className="roadmap-title" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Map size={14} style={{ color: "var(--accent)" }} /> Prep Roadmap
+            <Map size={14} style={{ color: "var(--accent)" }} /> Concept Syllabus
           </span>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             {setupStep === "done" && (
-              <button className="roadmap-rebuild-btn" onClick={handleRebuild} title="Re-configure roadmap">
-                <RefreshCw size={10} /> Reset
+              <button className="roadmap-rebuild-btn" onClick={() => setSetupStep("file")} title="Add more portion/material">
+                + Feed Portion
               </button>
             )}
             <button className="roadmap-rebuild-btn" onClick={onToggleExpand} title="Collapse">
@@ -234,12 +243,63 @@ export default function AnimatedRoadmap({
         </div>
 
         {setupStep === "done" && graphData && orderedNodes.length > 0 && (
-          <div className="roadmap-progress-bar-wrap">
-            <div className="roadmap-progress-track">
-              <div className="roadmap-progress-fill" style={{ width: `${Math.round(progress * 100)}%` }} />
+          <>
+            {/* Horizontal Unit Tabs Bar */}
+            {availableUnits.length > 0 && (
+              <div className="unit-tabs-bar" style={{ display: "flex", gap: 4, marginTop: 8, overflowX: "auto", paddingBottom: 4 }}>
+                <button
+                  className={`duration-chip ${selectedUnitTab === "all" ? "active" : ""}`}
+                  style={{
+                    fontSize: "0.7rem",
+                    padding: "3px 8px",
+                    borderRadius: "4px",
+                    border: "1px solid var(--border-color)",
+                    background: selectedUnitTab === "all" ? "var(--primary)" : "var(--bg-card)",
+                    color: selectedUnitTab === "all" ? "white" : "var(--text-muted)",
+                    whiteSpace: "nowrap",
+                    cursor: "pointer"
+                  }}
+                  onClick={() => setSelectedUnitTab("all")}
+                >
+                  All Units ({orderedNodes.length})
+                </button>
+
+                {availableUnits.map((unit) => (
+                  <button
+                    key={unit}
+                    className={`duration-chip ${selectedUnitTab === unit ? "active" : ""}`}
+                    style={{
+                      fontSize: "0.7rem",
+                      padding: "3px 8px",
+                      borderRadius: "4px",
+                      border: "1px solid var(--border-color)",
+                      background: selectedUnitTab === unit ? "var(--primary)" : "var(--bg-card)",
+                      color: selectedUnitTab === unit ? "white" : "var(--text-muted)",
+                      whiteSpace: "nowrap",
+                      cursor: "pointer"
+                    }}
+                    onClick={() => setSelectedUnitTab(unit)}
+                  >
+                    📁 {unit}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Filter Controls */}
+            <div className="syllabus-filter-bar" style={{ display: "flex", gap: 6, marginTop: 6, alignItems: "center" }}>
+              <select
+                className="setup-select"
+                style={{ padding: "3px 6px", fontSize: "0.72rem", flex: 1 }}
+                value={filterMode}
+                onChange={(e) => setFilterMode(e.target.value)}
+              >
+                <option value="all">Show All Concepts</option>
+                <option value="undone">Undone Only ({orderedNodes.length - masteredCount})</option>
+                <option value="mastered">Mastered Only ({masteredCount})</option>
+              </select>
             </div>
-            <span className="roadmap-progress-label">{masteredCount}/{orderedNodes.length}</span>
-          </div>
+          </>
         )}
       </div>
 
@@ -248,10 +308,10 @@ export default function AnimatedRoadmap({
           <div className="roadmap-setup-panel">
             <div className="setup-step-title">
               <span className="setup-step-num">1</span>
-              <span>Select your study portion</span>
+              <span>Feed Syllabus / Portion</span>
             </div>
             <p className="setup-hint">
-              Choose an existing file or upload your specific portion/syllabus/Q-bank.
+              Upload a specific portion file or paste text to extract and append new unique concepts.
             </p>
 
             {documents.length > 0 && (
@@ -306,60 +366,23 @@ export default function AnimatedRoadmap({
               <textarea
                 className="setup-textarea"
                 rows={4}
-                placeholder="Paste topic list, chapter names, or any text describing the portion..."
+                placeholder="Paste topic list, unit names, chapter outlines..."
                 value={portionText}
                 onChange={(e) => setPortionText(e.target.value)}
               />
             </div>
 
-            <button className="generate-roadmap-btn" onClick={handlePortionNext} style={{ width: "100%" }}>
-              Next: Configure Format →
-            </button>
-          </div>
-        )}
-
-        {setupStep === "format" && (
-          <div className="roadmap-setup-panel">
-            <div className="setup-step-title">
-              <span className="setup-step-num">2</span>
-              <span>Answer format & style</span>
-            </div>
-            <p className="setup-hint">
-              Choose what each concept answer should cover. Selected formats apply to the entire roadmap.
-            </p>
-
-            <div className="format-options-grid">
-              {ANSWER_FORMAT_OPTIONS.map((opt) => (
-                <div
-                  key={opt.id}
-                  className={`format-option-chip ${selectedFormats.includes(opt.id) ? "selected" : ""}`}
-                  onClick={() => toggleFormat(opt.id)}
-                >
-                  {opt.label}
-                </div>
-              ))}
-            </div>
-
-            <div className="setup-field" style={{ marginTop: 14 }}>
-              <label className="setup-label">Custom format instructions (optional)</label>
-              <textarea
-                className="setup-textarea"
-                rows={3}
-                placeholder="e.g. Always include a diagram description. Give analogies..."
-                value={customFormat}
-                onChange={(e) => setCustomFormat(e.target.value)}
-              />
-            </div>
-
             <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-              <button className="secondary-btn" onClick={() => setSetupStep("file")}>← Back</button>
+              {graphData && (
+                <button className="secondary-btn" onClick={() => setSetupStep("done")}>Cancel</button>
+              )}
               <button
                 className="generate-roadmap-btn"
-                onClick={handleFormatConfirm}
+                onClick={handlePortionSubmit}
                 disabled={generating}
                 style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
               >
-                {generating ? <Loader2 size={14} className="loading-spinner-animate" style={{ animation: "spin 1s linear infinite" }} /> : "Generate Roadmap"}
+                {generating ? <Loader2 size={14} className="loading-spinner-animate" style={{ animation: "spin 1s linear infinite" }} /> : "Extract & Add Concepts"}
               </button>
             </div>
             {error && <div className="setup-file-error" style={{ marginTop: 8 }}>{error}</div>}
@@ -372,78 +395,52 @@ export default function AnimatedRoadmap({
             {loading || generating ? (
               <div className="roadmap-empty">
                 <Loader2 size={24} className="loading-spinner-animate" style={{ animation: "spin 1s linear infinite" }} />
-                <p>{generating ? "Analyzing materials…" : "Loading…"}</p>
+                <p>{generating ? "Extracting & adding concepts…" : "Loading…"}</p>
               </div>
-            ) : !graphData ? (
+            ) : !graphData || orderedNodes.length === 0 ? (
               <div className="roadmap-empty">
                 <Map size={28} style={{ opacity: 0.5 }} />
-                <h4>No Roadmap Yet</h4>
-                <button className="generate-roadmap-btn" onClick={handleRebuild}>Configure &amp; Generate</button>
+                <h4>No Concepts Yet</h4>
+                <button className="generate-roadmap-btn" onClick={() => setSetupStep("file")}>Feed Portion</button>
               </div>
             ) : (
               <>
-                {orderedNodes.map((node, index) => {
-                  const status = getMasteryStatus(node.id);
-                  const isActive = activeNodeId === node.id;
-                  const isExpanded = expandedNodeId === node.id;
-                  const subPoints = node.sub_points || [];
-
-                  return (
-                    <div key={node.id} className="roadmap-node-wrapper">
-                      {index > 0 && (
-                        <div className={`roadmap-connector-line ${isConnectorFilled(index) ? "mastered" : ""}`} />
-                      )}
-                      <div
-                        className={`roadmap-node-card ${status} ${isActive ? "active" : ""}`}
-                        onClick={() => handleNodeClick(node, index)}
-                        title={status === "locked" ? "Complete prerequisites first" : `Open: ${node.title}`}
-                      >
-                        <div className="node-status-circle" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          {status === "mastered" ? (
-                            <CheckCircle size={14} style={{ color: "var(--success)" }} />
-                          ) : status === "unlocked" ? (
-                            <PlayCircle size={14} style={{ color: "var(--primary)" }} />
-                          ) : (
-                            <Lock size={12} style={{ color: "var(--text-muted)" }} />
-                          )}
-                        </div>
-                        <div className="node-card-body">
-                          <div className="node-card-title">{node.title}</div>
-                          <div className="node-card-sub" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                              <span>{node.difficulty || "medium"}</span>
-                              {subPoints.length > 0 && (
-                                <span className="sub-count-badge">{subPoints.length} topics</span>
-                              )}
-                            </div>
-                            {subPoints.length > 0 && (
-                              <div style={{ color: "var(--text-muted)", display: "flex" }}>
-                                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                              </div>
-                            )}
-                          </div>
-                          {isExpanded && subPoints.length > 0 && (
-                            <div className="node-sub-points-expanded">
-                              {subPoints.map((sp, i) => (
-                                <div key={i} className="node-sub-point-item">
-                                  <strong>{sp.title}</strong>
-                                  {sp.description}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                {/* LAQ Category Section */}
+                {laqNodes.length > 0 && (
+                  <div className="category-section" style={{ marginBottom: 16 }}>
+                    <div className="category-header" style={{ fontSize: "0.76rem", fontWeight: 700, color: "#f59e0b", padding: "6px 8px", background: "rgba(245,158,11,0.1)", borderRadius: 6, marginBottom: 8 }}>
+                      📌 Long Answer Questions (LAQ / 10 Marks) ({laqNodes.length})
                     </div>
-                  );
-                })}
+                    {laqNodes.map((node, index) => renderNodeCard(node, index))}
+                  </div>
+                )}
+
+                {/* SAQ Category Section */}
+                {saqNodes.length > 0 && (
+                  <div className="category-section" style={{ marginBottom: 16 }}>
+                    <div className="category-header" style={{ fontSize: "0.76rem", fontWeight: 700, color: "#3b82f6", padding: "6px 8px", background: "rgba(59,130,246,0.1)", borderRadius: 6, marginBottom: 8 }}>
+                      📝 Short Answer Questions (SAQ / 5 &amp; 2 Marks) ({saqNodes.length})
+                    </div>
+                    {saqNodes.map((node, index) => renderNodeCard(node, index))}
+                  </div>
+                )}
+
+                {/* Core Concepts Category Section */}
+                {coreNodes.length > 0 && (
+                  <div className="category-section" style={{ marginBottom: 16 }}>
+                    <div className="category-header" style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--accent)", padding: "6px 8px", background: "rgba(99,102,241,0.1)", borderRadius: 6, marginBottom: 8 }}>
+                      💡 Core Subject Concepts ({coreNodes.length})
+                    </div>
+                    {coreNodes.map((node, index) => renderNodeCard(node, index))}
+                  </div>
+                )}
               </>
             )}
           </>
         )}
       </div>
 
-      {setupStep === "done" && graphData && orderedNodes.length > 0 && (
+      {setupStep === "done" && graphData && filteredNodes.length > 0 && (
         <div className="roadmap-nav-bar">
           <button
             className="roadmap-nav-btn prev"
@@ -456,16 +453,16 @@ export default function AnimatedRoadmap({
 
           <div className="roadmap-nav-indicator">
             <span className="nav-node-label">
-              {orderedNodes[currentNodeIndex]?.title?.substring(0, 20) || "—"}
-              {(orderedNodes[currentNodeIndex]?.title?.length || 0) > 20 ? "…" : ""}
+              {filteredNodes[currentNodeIndex]?.title?.substring(0, 20) || "—"}
+              {(filteredNodes[currentNodeIndex]?.title?.length || 0) > 20 ? "…" : ""}
             </span>
-            <span className="nav-node-index">{currentNodeIndex + 1} / {orderedNodes.length}</span>
+            <span className="nav-node-index">{currentNodeIndex + 1} / {filteredNodes.length}</span>
           </div>
 
           <button
             className="roadmap-nav-btn next"
             onClick={goNext}
-            disabled={currentNodeIndex === orderedNodes.length - 1}
+            disabled={currentNodeIndex === filteredNodes.length - 1}
             title="Next concept"
           >
             Next →
@@ -474,4 +471,43 @@ export default function AnimatedRoadmap({
       )}
     </div>
   );
+
+  function renderNodeCard(node, index) {
+    const status = getMasteryStatus(node.id);
+    const isActive = activeNodeId === node.id;
+    const isExpanded = expandedNodeId === node.id;
+    const subPoints = node.sub_points || [];
+    const catTag = node.difficulty?.toUpperCase();
+
+    return (
+      <div key={node.id} className="roadmap-node-wrapper">
+        <div
+          className={`roadmap-node-card ${status} ${isActive ? "active" : ""}`}
+          onClick={() => handleNodeClick(node, index)}
+          title={`Open: ${node.title}`}
+        >
+          <div className="node-status-circle" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {status === "mastered" ? (
+              <CheckCircle size={14} style={{ color: "var(--success)" }} />
+            ) : (
+              <PlayCircle size={14} style={{ color: "var(--primary)" }} />
+            )}
+          </div>
+          <div className="node-card-body">
+            <div className="node-card-title">{node.title}</div>
+            <div className="node-card-sub" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                {status === "mastered" && (
+                  <span className="sub-count-badge" style={{ background: "rgba(16,185,129,0.25)", color: "#10b981", fontWeight: 700 }}>
+                    ✅ Mastered
+                  </span>
+                )}
+                {catTag && <span className="sub-count-badge" style={{ background: catTag === "LAQ" ? "rgba(245,158,11,0.2)" : catTag === "SAQ" ? "rgba(59,130,246,0.2)" : undefined }}>{catTag}</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 }

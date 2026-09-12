@@ -1,4 +1,5 @@
 import React from 'react';
+import { Volume2, VolumeX, Printer } from 'lucide-react';
 
 /**
  * A robust, zero-dependency Markdown parser that converts Markdown string
@@ -208,5 +209,48 @@ export default function MarkdownRenderer({ content }) {
     );
   }
 
-  return <div className="markdown-renderer-body">{elements}</div>;
+  const [speaking, setSpeaking] = React.useState(false);
+
+  function handleSpeak() {
+    if (!("speechSynthesis" in window)) {
+      alert("Text-to-speech is not supported in your browser.");
+      return;
+    }
+    if (speaking) {
+      window.speechSynthesis.cancel();
+      setSpeaking(false);
+      return;
+    }
+    const cleanText = content.replace(/[*#`|>|-]/g, "").trim();
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.onend = () => setSpeaking(false);
+    utterance.onerror = () => setSpeaking(false);
+    setSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function handleExportPDF() {
+    window.print();
+  }
+
+  return (
+    <div className="markdown-container-wrapper">
+      <div className="markdown-action-bar">
+        <button
+          className={`markdown-action-btn icon-only ${speaking ? "speaking" : ""}`}
+          onClick={handleSpeak}
+          title={speaking ? "Stop audio" : "Listen audio (Text-to-Speech)"}
+        >
+          {speaking ? <VolumeX size={15} /> : <Volume2 size={15} />}
+        </button>
+        <button className="markdown-action-btn" onClick={handleExportPDF} title="Print or save as PDF">
+          <Printer size={13} style={{ marginRight: 4 }} /> Export PDF
+        </button>
+      </div>
+      <div className="markdown-renderer-body">{elements}</div>
+    </div>
+  );
 }
+
