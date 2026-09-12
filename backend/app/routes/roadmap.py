@@ -16,15 +16,7 @@ from app.utils.security import get_current_user
 router = APIRouter(prefix="/workspaces", tags=["Study Roadmap"])
 
 
-def parse_json_from_ai(text: str):
-    """Clean markdown code blocks and parse JSON output from LLM."""
-    cleaned = text.strip()
-    # Remove code blocks if present
-    if "```json" in cleaned:
-        cleaned = cleaned.split("```json")[1].split("```")[0].strip()
-    elif "```" in cleaned:
-        cleaned = cleaned.split("```")[1].split("```")[0].strip()
-    return json.loads(cleaned)
+from app.services.graph_service import parse_json_from_ai
 
 
 @router.get("/{workspace_id}/roadmap")

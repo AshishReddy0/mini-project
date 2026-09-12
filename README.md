@@ -1,166 +1,166 @@
-## Study Companion
+# 📚 Study Companion
 
-AI-powered academic workspace for organizing study materials, generating revision content, quizzes, exam preparation, and workspace-based learning.
+**Study Companion** is an AI-powered academic workspace platform designed to organize course study materials, extract multi-unit concept syllabi, visualize prerequisite pathways, and generate exam-oriented learning resources.
 
-## Project Status
- Completed Features
-- Authentication
-   User registration, User login and JWT base authentication
-- Workspace Management
-   Create workspaces and view workspaces
-- Document Management
-   Upload PDF or DOCX files and store extracted text in the database
-- AI Content Generation
-   
-## Database
+---
 
-Stores:
+## ✨ Features & System Capabilities
 
-Users, 
-Workspaces, 
-Documents, 
-Extracted text, 
-Generated content, 
-Chat history
+### 🔐 1. Authentication & Workspace Isolation
+- **User Authentication**: Registration, Login, and JWT Token-based session management.
+- **Subject-Based Workspaces**: Organize study materials by course/subject (e.g., *Operating Systems*, *Computer Networks*, *IoT*, *Machine Learning*).
+- **Contextual Isolation**: Each workspace maintains isolated documents, concept graphs, chat history, and generated revision outputs.
 
-## Prerequisites
+---
 
-Install these before starting:
+### 📑 2. Document Processing & Portion Feeding
+- **Supported File Types**: Upload PDF (`.pdf`), Word (`.docx`), and Text (`.txt`) study materials.
+- **Portion Text Feeding**: Append specific unit text or question banks directly using the `+ Feed Portion` interface.
+- **Automatic Text Extraction**: Uses `pypdf`, `pdfplumber`, and `python-docx` text extraction pipelines.
 
-| Tool | Version | Check with |
-|---|---|---|
-| Python | **3.11** (required) | `py -3.11 --version` |
-| Node.js | 18+ | `node --version` |
-| PostgreSQL | any recent | running via pgAdmin or Windows service |
-| npm | comes with Node | `npm --version` |
+---
 
-> **Important:** Use Python 3.11 for the backend. Python 3.14 may fail to install `psycopg2-binary` and `pydantic-core`.
+### 🗺️ 3. Concept Syllabus & Multi-Unit Graph pathways
+- **Multi-Unit Scanning Engine**: Automatically detects and splits multi-unit Question Banks and course files (`Unit 1` to `Unit 5` / `UNIT-I` to `UNIT-V`).
+- **Clickable Unit Tabs**: Filter concepts by unit tabs (e.g. `All Units`, `📁 Unit 1 (15)`, `📁 Unit 2 (16)`...) with concept counts.
+- **Gated Learning DAG**: Topological prerequisite graph mapping locked, unlocked, and mastered concept states.
+- **Mastery Gated Checks**:
+  - **MCQ Practice Quizzes**: 3-question mini-quizzes per topic.
+  - **Active Recall Explain-Back**: Interactive student explanations graded by AI with score and feedback.
+- **Clear Feed Action**: Trash bin action to reset/re-feed workspace syllabi.
 
-## Step 1 — Clone Repository
+---
 
-- git clone your-fork-repository-url
-- cd mini-project
+### 📜 4. Concept Syllabus PDF Export Report
+- **Overall Unit-Wise Export**: Generate and download a PDF report containing:
+  - **Executive Progress Summary**: Learned vs. left to do concept counts and percentages.
+  - **Status Breakdown**: Clear lists of mastered, in-progress, and locked topics.
+  - **Unit-Wise Question & Reference Answer Guide**: Formatted reference study guide grouped strictly unit-by-unit.
 
-## Step 2 — PostgreSQL Setup
+---
 
-- Start PostgreSQL.
-- Create database:
-  CREATE DATABASE "MiniProject";
+### 🤖 5. Academic AI Copilot & Logic Flows
+- **Workspace-Aware Chat**: Ask questions grounded in uploaded study material context.
+- **Logic Flow & Mind Maps**: Visual step-by-step process flows for complex algorithms and architectures.
+- **JSON Auto-Repair**: Engine to handle truncated or unescaped AI JSON responses.
 
-## Step 3 — Backend Setup
+---
 
-1. Go to backend:  cd backend
+## 🛠️ Technology Stack
 
-   - Windows:
-     py -3.11 -m venv venv
-     venv\Scripts\activate
+| Layer | Technology |
+|---|---|
+| **Frontend** | React 18, Vite, Lucide Icons, Vanilla CSS |
+| **Backend** | Python 3.11, FastAPI, Uvicorn |
+| **Database** | PostgreSQL / SQLite (SQLAlchemy ORM) |
+| **AI Models** | Gemini API & Groq LLM API |
+| **PDF Report Generation** | ReportLab |
+| **Document Processing** | PyPDF, pdfplumber, python-docx |
 
-   - Mac/Linux:
-    python3 -m venv venv
-    source venv/bin/activate
+---
 
-2. Install dependencies:
-   pip install -r requirements.txt
-   
-3. Configure environment variables:
-   A backend/.env file should already exist. If not, create it from the example:
-   copy .env.example .env
-   
+## 🚀 Getting Started
 
-  DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/MiniProject
-  JWT_SECRET_KEY=your_secret_key
-  JWT_EXPIRE_MINUTES=1440
-  GEMINI_API_KEY=your_gemini_api_key
+### Prerequisites
+- **Python**: `3.11` (recommended)
+- **Node.js**: `18+`
+- **PostgreSQL**: (or SQLite for development)
 
-**Password special characters:** If your password contains @, #, or %, URL-encode them in DATABASE_URL. 
-| Character in password | Use in URL |
-| @ | %40 |
-| # | %23 |
-| % | %25 | 
-Example: password Rise@-1 → Rise%40-1
-env
-DATABASE_URL=postgresql://postgres:Rise%40-1@localhost:5432/MiniProject
+---
 
- 4. Start backend:
-    uvicorn app.main:app --reload
+### 1️⃣ Clone Repository
+```bash
+git clone <repository-url>
+cd mini-project
+```
 
-   Backend: http://localhost:8000
-   Swagger: http://localhost:8000/docs
-   Health: http://localhost:8000/health
-           http://localhost:8000/health/db
+---
 
-## Step 4 Frontend Setup
+### 2️⃣ Backend Setup
+```bash
+cd backend
 
-1. Open **second** terminal:
-   cd frontend
-   
-3. Install:
-   npm install
-   
-4. Configure environment variables:
-   copy .env.example .env
-   Edit:
+# Create Virtual Environment
+python -m venv venv
 
-   VITE_API_URL=http://localhost:8000
+# Activate Virtual Environment
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+# Mac/Linux:
+source venv/bin/activate
 
-5. Start frontend:
-   npm run dev
+# Install Dependencies
+pip install -r requirements.txt
 
-   Frontend: http://localhost:5173
+# Configure Environment Variables (.env)
+cp .env.example .env
+```
 
-## Project Structure
+**Configure `.env`**:
+```env
+DATABASE_URL=postgresql://postgres:password@localhost:5432/MiniProject
+JWT_SECRET_KEY=your_secret_key
+JWT_EXPIRE_MINUTES=1440
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+**Run Backend Server**:
+```bash
+uvicorn app.main:app --reload
+```
+- API Base URL: `http://localhost:8000`
+- Swagger UI Docs: `http://localhost:8000/docs`
+
+---
+
+### 3️⃣ Frontend Setup
+Open a new terminal window:
+```bash
+cd frontend
+
+# Install Dependencies
+npm install
+
+# Configure Environment Variables (.env)
+cp .env.example .env
+```
+
+**Configure `frontend/.env`**:
+```env
+VITE_API_URL=http://localhost:8000
+```
+
+**Run Frontend Dev Server**:
+```bash
+npm run dev
+```
+- Frontend Application: `http://localhost:5173`
+
+---
+
+## 📁 Project Structure
+
+```
 mini-project/
 ├── backend/
 │   ├── app/
-│   ├── uploads/
-│   ├── .env.example
+│   │   ├── models/        # SQLAlchemy Models (User, Workspace, ConceptNode...)
+│   │   ├── routes/        # FastAPI API Endpoints (Auth, Graph, Content, Chat)
+│   │   ├── schemas/       # Pydantic Input/Output Schemas
+│   │   ├── services/      # Business Logic (Graph, Gemini, PDF Export, Content)
+│   │   ├── database.py    # DB Connection Setup
+│   │   └── main.py        # FastAPI Application Entry
+│   ├── uploads/           # Permanent Upload Storage
 │   └── requirements.txt
 │
 ├── frontend/
 │   ├── src/
-│   ├── components/
-│   ├── .env.example
+│   │   ├── api.js         # Axios API Client & Services
+│   │   ├── components/   # React Components (AnimatedRoadmap, ConceptGraphPanel...)
+│   │   ├── styles/        # CSS Design System
+│   │   └── App.jsx        # Main Layout & Workspace Routing
+│   └── package.json
 │
+├── project-architecture.md # Technical Architecture Document
 └── README.md
-
-## How to Use
-
-- Register/Login: 
-   Create account and login.
-
-- Create Workspace (example: Operating System): 
-  Upload Documents (PDF or DOCX),
-  Each document belongs to a workspace.
-
-- Generate Content: 
-  Revision Notes, 
-  Exam Preparation, 
-  Quiz(View score, Review mistakes)
-  
-- Content History: 
-  View previous generated content, 
-  Delete old content
-  
-- Workspace Chat: 
-  Ask questions based on uploaded study material, 
-  Chat is stored workspace-wise.
-
-## Daily Development
-
-Terminal 1 Backend:
-cd backend
-venv\Scripts\activate
-uvicorn app.main:app --reload
-
-Terminal 2 Frontend:
-cd frontend
-npm run dev
-
-## Future Improvements
-
-Voice input, 
-Flashcards, 
-Progress analytics, 
-Export notes as PDF, 
-Leaderboard, 
-Study streak tracking
+```

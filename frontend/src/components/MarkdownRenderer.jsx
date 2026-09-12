@@ -245,9 +245,6 @@ export default function MarkdownRenderer({ content }) {
         >
           {speaking ? <VolumeX size={15} /> : <Volume2 size={15} />}
         </button>
-        <button className="markdown-action-btn" onClick={handleExportPDF} title="Print or save as PDF">
-          <Printer size={13} style={{ marginRight: 4 }} /> Export PDF
-        </button>
       </div>
       <div className="markdown-renderer-body">{elements}</div>
     </div>

@@ -19,11 +19,25 @@ export default function ContentHistoryPanel({
   onClick={() => {
     try {
       if (item.content_type === "quiz") {
-        const cleaned = item.content
-         .replace(/```json/g, "")
-         .replace(/```/g, "")
-         .trim();
-        const parsedQuiz = JSON.parse(cleaned);
+        let cleaned = item.content.replace(/```json/gi, "").replace(/```/g, "").trim();
+        let parsedQuiz;
+        try {
+          parsedQuiz = JSON.parse(cleaned);
+        } catch (_) {
+          let repaired = cleaned;
+          const quoteMatches = repaired.match(/(?<!\\)"/g) || [];
+          if (quoteMatches.length % 2 !== 0) repaired += '"';
+
+          const openBraces = (repaired.match(/\{/g) || []).length;
+          const closeBraces = (repaired.match(/\}/g) || []).length;
+          const openBrackets = (repaired.match(/\[/g) || []).length;
+          const closeBrackets = (repaired.match(/\]/g) || []).length;
+
+          for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += "]";
+          for (let i = 0; i < openBraces - closeBraces; i++) repaired += "}";
+
+          parsedQuiz = JSON.parse(repaired);
+        }
         setQuizData(parsedQuiz);
         setGeneratedContent("");
       } else {

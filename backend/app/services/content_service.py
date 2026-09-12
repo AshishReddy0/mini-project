@@ -220,6 +220,15 @@ def create_content(
     needs_json = content_type in (ContentType.QUIZ, ContentType.LOGIC_FLOW)
     generated_text = generate_content(prompt, expect_json=needs_json)
 
+    if needs_json:
+        try:
+            from app.services.graph_service import parse_json_from_ai
+            parsed_data = parse_json_from_ai(generated_text)
+            import json
+            generated_text = json.dumps(parsed_data)
+        except Exception as e:
+            print(f"Error parsing/repairing JSON for {content_type}: {e}")
+
     default_titles = {
         ContentType.REVISION: "Revision Notes",
         ContentType.EXAM: "Exam Preparation",

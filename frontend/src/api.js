@@ -92,6 +92,26 @@ export const api = {
     }),
   getGraph: (workspaceId) =>
     apiFetch(`/workspaces/${workspaceId}/graph`),
+  clearGraph: (workspaceId) =>
+    apiFetch(`/workspaces/${workspaceId}/graph`, {
+      method: "DELETE",
+    }),
+  downloadSyllabusPDF: async (workspaceId, filename = "Concept_Syllabus.pdf") => {
+    const token = getToken();
+    const headers = {};
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await fetch(`${API_URL}/workspaces/${workspaceId}/graph/export-pdf`, { headers });
+    if (!response.ok) throw new Error("Failed to download PDF report");
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
 
   // Node actions
   getNodeAnswer: (workspaceId, nodeId) =>

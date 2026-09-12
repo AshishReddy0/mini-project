@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import { Map, RefreshCw, ChevronLeft, ChevronRight, Loader2, FileText, Paperclip, X, Lock, PlayCircle, CheckCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Map, RefreshCw, ChevronLeft, ChevronRight, Loader2, FileText, Paperclip, X, Lock, PlayCircle, CheckCircle, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
 const ANSWER_FORMAT_OPTIONS = [
   { id: "meaning", label: "Meaning / Definition" },
@@ -35,6 +35,7 @@ export default function AnimatedRoadmap({
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const [error, setError] = useState("");
   const [expandedNodeId, setExpandedNodeId] = useState(null);
   const [currentNodeIndex, setCurrentNodeIndex] = useState(0);
@@ -65,7 +66,8 @@ export default function AnimatedRoadmap({
       } else {
         setGraphData(null);
       }
-    } catch (_) {
+    } catch (err) {
+      setError(err.message || "Failed to load concept graph.");
       setGraphData(null);
     } finally {
       setLoading(false);
@@ -132,21 +134,67 @@ export default function AnimatedRoadmap({
     }
   };
 
+  const handleClearGraph = async () => {
+    if (!window.confirm("Are you sure you want to clear all concepts from this syllabus?")) return;
+    setLoading(true);
+    setError("");
+    try {
+      await api.clearGraph(workspaceId);
+      setGraphData(null);
+      setSetupStep("file");
+    } catch (err) {
+      setError(err.message || "Failed to clear concept syllabus.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setExportingPdf(true);
+    setError("");
+    try {
+      await api.downloadSyllabusPDF(workspaceId, "Concept_Syllabus.pdf");
+    } catch (err) {
+      setError("Failed to export PDF: " + err.message);
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
   const [selectedUnitTab, setSelectedUnitTab] = useState("all");
 
   const orderedNodes = graphData?.nodes
     ? [...graphData.nodes].sort((a, b) => (a.order_hint ?? 0) - (b.order_hint ?? 0))
     : [];
 
+  const ROMAN_MAP = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
+
   function getSingleUnits(unitRef) {
     if (!unitRef) return ["Unit 1"];
-    const parts = unitRef.split(/[,&]|\band\b/i).map((s) => s.trim()).filter(Boolean);
+    const parts = String(unitRef).split(/[,&]|\band\b/i).map((s) => s.trim()).filter(Boolean);
     const cleaned = parts.map((p) => {
-      const match = p.match(/unit\s*(\d+)/i);
-      if (match) {
-        return `Unit ${match[1]}`;
+      // 1. Match Roman numeral unit (e.g. UNIT-I, UNIT-II, Unit III, UNIT-IV, UNIT-V)
+      const romanMatch = p.match(/(?:unit|module|chapter)?\s*[\:\-]?\s*\b([ivx]+)\b/i);
+      if (romanMatch && romanMatch[1]) {
+        const val = ROMAN_MAP[romanMatch[1].toLowerCase()];
+        if (val) return `Unit ${val}`;
       }
-      return p.replace(/[:\-].*$/, "").trim();
+
+      // 2. Match numeric unit (e.g. Unit 1, Unit-1, Module 2, Chapter 3)
+      const numMatch = p.match(/(?:unit|module|chapter)?\s*[\:\-]?\s*(\d+)/i);
+      if (numMatch && numMatch[1]) {
+        return `Unit ${parseInt(numMatch[1], 10)}`;
+      }
+
+      if (ROMAN_MAP[p.toLowerCase()]) {
+        return `Unit ${ROMAN_MAP[p.toLowerCase()]}`;
+      }
+
+      const stripped = p.replace(/[:].*$/, "").trim();
+      if (!stripped || ["UNIT", "MODULE", "CHAPTER"].includes(stripped.toUpperCase())) {
+        return "Unit 1";
+      }
+      return stripped;
     }).filter(Boolean);
     return Array.from(new Set(cleaned));
   }
@@ -157,6 +205,14 @@ export default function AnimatedRoadmap({
     const numA = parseInt(a.replace(/\D/g, "")) || 0;
     const numB = parseInt(b.replace(/\D/g, "")) || 0;
     return numA - numB || a.localeCompare(b);
+  });
+
+  const unitNodeCounts = {};
+  orderedNodes.forEach((node) => {
+    const nodeUnits = getSingleUnits(node.unit_ref);
+    nodeUnits.forEach((u) => {
+      unitNodeCounts[u] = (unitNodeCounts[u] || 0) + 1;
+    });
   });
 
   const getMasteryStatus = (nodeId) =>
@@ -173,16 +229,20 @@ export default function AnimatedRoadmap({
     return true;
   });
 
-  // Category division (LAQ, SAQ, Concept)
-  const laqNodes = filteredNodes.filter(
-    (n) => n.difficulty?.toUpperCase() === "LAQ" || n.title.toLowerCase().includes("10 mark") || n.title.toLowerCase().includes("long")
-  );
-  const saqNodes = filteredNodes.filter(
-    (n) => n.difficulty?.toUpperCase() === "SAQ" || n.title.toLowerCase().includes("5 mark") || n.title.toLowerCase().includes("2 mark") || n.title.toLowerCase().includes("short")
-  );
-  const coreNodes = filteredNodes.filter(
-    (n) => !laqNodes.includes(n) && !saqNodes.includes(n)
-  );
+  // Group nodes strictly Unit-Wise (Unit 1, Unit 2, Unit 3...)
+  const unitGroups = {};
+  filteredNodes.forEach((node) => {
+    const units = getSingleUnits(node.unit_ref);
+    const primaryUnit = units[0] || "Unit 1";
+    if (!unitGroups[primaryUnit]) unitGroups[primaryUnit] = [];
+    unitGroups[primaryUnit].push(node);
+  });
+
+  const sortedUnitKeys = Object.keys(unitGroups).sort((a, b) => {
+    const numA = parseInt(a.replace(/\D/g, "")) || 0;
+    const numB = parseInt(b.replace(/\D/g, "")) || 0;
+    return numA - numB || a.localeCompare(b);
+  });
 
   const masteredCount = orderedNodes.filter(
     (n) => getMasteryStatus(n.id) === "mastered"
@@ -232,9 +292,33 @@ export default function AnimatedRoadmap({
           </span>
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             {setupStep === "done" && (
-              <button className="roadmap-rebuild-btn" onClick={() => setSetupStep("file")} title="Add more portion/material">
-                + Feed Portion
-              </button>
+              <>
+                <button className="roadmap-rebuild-btn" onClick={() => setSetupStep("file")} title="Add more portion/material">
+                  + Feed Portion
+                </button>
+                <button
+                  className="roadmap-rebuild-btn"
+                  onClick={handleExportPDF}
+                  disabled={exportingPdf}
+                  title="Export Concept Syllabus PDF Report"
+                  style={{ display: "flex", alignItems: "center", gap: 4, background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}
+                >
+                  {exportingPdf ? (
+                    <Loader2 size={12} className="loading-spinner-animate" style={{ animation: "spin 1s linear infinite" }} />
+                  ) : (
+                    <FileText size={12} />
+                  )}
+                  Export PDF
+                </button>
+                <button
+                  className="roadmap-rebuild-btn"
+                  onClick={handleClearGraph}
+                  title="Clear concept syllabus feed"
+                  style={{ color: "var(--error)", display: "flex", alignItems: "center", justifyContent: "center", padding: "4px 7px" }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </>
             )}
             <button className="roadmap-rebuild-btn" onClick={onToggleExpand} title="Collapse">
               <ChevronRight size={12} />
@@ -246,7 +330,7 @@ export default function AnimatedRoadmap({
           <>
             {/* Horizontal Unit Tabs Bar */}
             {availableUnits.length > 0 && (
-              <div className="unit-tabs-bar" style={{ display: "flex", gap: 4, marginTop: 8, overflowX: "auto", paddingBottom: 4 }}>
+              <div className="unit-tabs-bar">
                 <button
                   className={`duration-chip ${selectedUnitTab === "all" ? "active" : ""}`}
                   style={{
@@ -280,7 +364,7 @@ export default function AnimatedRoadmap({
                     }}
                     onClick={() => setSelectedUnitTab(unit)}
                   >
-                    📁 {unit}
+                    📁 {unit} ({unitNodeCounts[unit] || 0})
                   </button>
                 ))}
               </div>
@@ -405,35 +489,15 @@ export default function AnimatedRoadmap({
               </div>
             ) : (
               <>
-                {/* LAQ Category Section */}
-                {laqNodes.length > 0 && (
-                  <div className="category-section" style={{ marginBottom: 16 }}>
-                    <div className="category-header" style={{ fontSize: "0.76rem", fontWeight: 700, color: "#f59e0b", padding: "6px 8px", background: "rgba(245,158,11,0.1)", borderRadius: 6, marginBottom: 8 }}>
-                      📌 Long Answer Questions (LAQ / 10 Marks) ({laqNodes.length})
+                {sortedUnitKeys.map((unitKey) => (
+                  <div key={unitKey} className="category-section" style={{ marginBottom: 16 }}>
+                    <div className="category-header" style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--accent)", padding: "6px 10px", background: "rgba(99,102,241,0.1)", borderRadius: 6, marginBottom: 8, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <span>📁 {unitKey}</span>
+                      <span style={{ fontSize: "0.7rem", opacity: 0.85 }}>{unitGroups[unitKey].length} concepts</span>
                     </div>
-                    {laqNodes.map((node, index) => renderNodeCard(node, index))}
+                    {unitGroups[unitKey].map((node, index) => renderNodeCard(node, index))}
                   </div>
-                )}
-
-                {/* SAQ Category Section */}
-                {saqNodes.length > 0 && (
-                  <div className="category-section" style={{ marginBottom: 16 }}>
-                    <div className="category-header" style={{ fontSize: "0.76rem", fontWeight: 700, color: "#3b82f6", padding: "6px 8px", background: "rgba(59,130,246,0.1)", borderRadius: 6, marginBottom: 8 }}>
-                      📝 Short Answer Questions (SAQ / 5 &amp; 2 Marks) ({saqNodes.length})
-                    </div>
-                    {saqNodes.map((node, index) => renderNodeCard(node, index))}
-                  </div>
-                )}
-
-                {/* Core Concepts Category Section */}
-                {coreNodes.length > 0 && (
-                  <div className="category-section" style={{ marginBottom: 16 }}>
-                    <div className="category-header" style={{ fontSize: "0.76rem", fontWeight: 700, color: "var(--accent)", padding: "6px 8px", background: "rgba(99,102,241,0.1)", borderRadius: 6, marginBottom: 8 }}>
-                      💡 Core Subject Concepts ({coreNodes.length})
-                    </div>
-                    {coreNodes.map((node, index) => renderNodeCard(node, index))}
-                  </div>
-                )}
+                ))}
               </>
             )}
           </>
@@ -495,16 +559,13 @@ export default function AnimatedRoadmap({
           </div>
           <div className="node-card-body">
             <div className="node-card-title">{node.title}</div>
-            <div className="node-card-sub" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                {status === "mastered" && (
-                  <span className="sub-count-badge" style={{ background: "rgba(16,185,129,0.25)", color: "#10b981", fontWeight: 700 }}>
-                    ✅ Mastered
-                  </span>
-                )}
-                {catTag && <span className="sub-count-badge" style={{ background: catTag === "LAQ" ? "rgba(245,158,11,0.2)" : catTag === "SAQ" ? "rgba(59,130,246,0.2)" : undefined }}>{catTag}</span>}
+            {status === "mastered" && (
+              <div className="node-card-sub" style={{ marginTop: 4 }}>
+                <span className="sub-count-badge" style={{ background: "rgba(16,185,129,0.25)", color: "#10b981", fontWeight: 700 }}>
+                  ✅ Mastered
+                </span>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

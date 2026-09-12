@@ -129,17 +129,32 @@ export default function LogicFlowPanel({ workspaceId, documents, contentHistory,
     setError("");
     setSelectedFlow(item);
     try {
-      const cleaned = item.content
-        .replace(/```json/g, "")
-        .replace(/```/g, "")
-        .trim();
-      const parsed = JSON.parse(cleaned);
+      let cleaned = item.content.replace(/```json/gi, "").replace(/```/g, "").trim();
+      let parsed;
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch (_) {
+        // Repair unterminated strings or unclosed brackets
+        let repaired = cleaned;
+        const quoteMatches = repaired.match(/(?<!\\)"/g) || [];
+        if (quoteMatches.length % 2 !== 0) repaired += '"';
+
+        const openBraces = (repaired.match(/\{/g) || []).length;
+        const closeBraces = (repaired.match(/\}/g) || []).length;
+        const openBrackets = (repaired.match(/\[/g) || []).length;
+        const closeBrackets = (repaired.match(/\]/g) || []).length;
+
+        for (let i = 0; i < openBrackets - closeBrackets; i++) repaired += "]";
+        for (let i = 0; i < openBraces - closeBraces; i++) repaired += "}";
+
+        parsed = JSON.parse(repaired);
+      }
       setFlowData(parsed);
       if (parsed.steps && parsed.steps.length > 0) {
         setActiveStepId(parsed.steps[0].id);
       }
     } catch (err) {
-      setError("Failed to parse the logic flow JSON: " + err.message);
+      setError("Failed to parse logic flow JSON: " + err.message);
       setFlowData(null);
     }
   };

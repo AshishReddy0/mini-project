@@ -2354,9 +2354,55 @@ body {
   color: var(--accent);
 }
 
-.score-label {
-  font-size: 0.82rem;
-  font-weight: 600;
+
+/* =====================================================
+   App-Styled Custom Scrollbars & Horizontal Navigation
+   ===================================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 5px;
 }
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}
+
+.unit-tabs-bar {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.unit-tabs-bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.unit-tabs-bar::-webkit-scrollbar-track {
+  background: var(--bg-sidebar);
+  border-radius: 4px;
+}
+
+.unit-tabs-bar::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.unit-tabs-bar::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}
+
 
 

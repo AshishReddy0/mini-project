@@ -53,6 +53,7 @@ def get_graph(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     """Retrieve the concept graph nodes, edges, and user mastery statuses."""
+    workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
     # Clean up duplicate nodes or legacy multi-unit strings in the database
     graph_service.cleanup_db_workspace_nodes(db, workspace.id)
 
@@ -82,6 +83,42 @@ def get_graph(
         "edges": edges,
         "masteries": mastery_map
     }
+
+
+@router.delete("/{workspace_id}/graph", status_code=status.HTTP_200_OK)
+def clear_graph(
+    workspace_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Clear all concept nodes and graph data for a workspace."""
+    workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
+    graph_service.clear_workspace_graph(db, workspace.id)
+    return {"message": "Concept syllabus cleared successfully"}
+
+
+@router.get("/{workspace_id}/graph/export-pdf")
+def export_graph_pdf(
+    workspace_id: UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+):
+    """Generate and download a comprehensive Concept Syllabus PDF report."""
+    workspace = workspace_service.get_workspace_for_user(db, workspace_id, current_user)
+    try:
+        pdf_bytes = graph_service.generate_syllabus_pdf_bytes(db, workspace)
+        safe_title = "".join(c for c in workspace.name if c.isalnum() or c in (" ", "_", "-")).strip().replace(" ", "_")
+        filename = f"{safe_title or 'Workspace'}_Concept_Syllabus.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate PDF: {str(e)}"
+        )
 
 
 @router.get("/{workspace_id}/node/{node_id}/answer")

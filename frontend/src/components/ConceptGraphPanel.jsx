@@ -351,7 +351,12 @@ export default function ConceptGraphPanel({ workspaceId, documents, setActiveNod
                       </div>
                       <div className="node-body">
                         <h6>{node.title}</h6>
-                        <span className="node-difficulty">{node.difficulty}</span>
+                        <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 2 }}>
+                          {node.unit_ref && <span className="node-difficulty" style={{ background: "rgba(99,102,241,0.15)", color: "var(--accent)" }}>{node.unit_ref}</span>}
+                          {node.difficulty && !["laq", "saq"].includes(node.difficulty.toLowerCase()) && (
+                            <span className="node-difficulty">{node.difficulty}</span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -370,6 +375,11 @@ export default function ConceptGraphPanel({ workspaceId, documents, setActiveNod
 
               <div className="inspector-scroll-body">
                 <h3>{selectedNode.title}</h3>
+                {selectedNode.unit_ref && (
+                  <span className="prereq-tag" style={{ background: "rgba(99,102,241,0.15)", color: "var(--accent)", marginBottom: 8, display: "inline-block" }}>
+                    📁 {selectedNode.unit_ref}
+                  </span>
+                )}
                 
                 {/* Prerequisites list */}
                 <div className="inspector-prereqs-box">
