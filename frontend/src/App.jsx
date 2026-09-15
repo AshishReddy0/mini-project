@@ -6,7 +6,7 @@ import TabManager from "./components/TabManager";
 import AnimatedRoadmap from "./components/AnimatedRoadmap";
 import FocusTimer from "./components/FocusTimer";
 import WorkspaceAnalytics from "./components/WorkspaceAnalytics";
-import { BookOpen, Sun, Moon, User, FolderClosed, LogOut, Plus, MessageSquare, FileText, Layers, BarChart3 } from "lucide-react";
+import { BookOpen, Sun, Moon, User, FolderClosed, LogOut, Plus, MessageSquare, FileText, Layers, BarChart3, Trash2 } from "lucide-react";
 
 // Default tab that is always present (pinned, cannot be closed)
 const CHAT_TAB = { id: "chat", type: "chat", label: "Chat", icon: <MessageSquare size={14} /> };
@@ -132,6 +132,26 @@ export default function App() {
       showToast(err.message);
     }
   }
+
+  async function handleDeleteWorkspace(wsId, wsName) {
+    if (!window.confirm(`Are you sure you want to delete workspace "${wsName}"?\nAll materials, chat history, and concept progress will be permanently deleted.`)) {
+      return;
+    }
+    try {
+      await api.deleteWorkspace(wsId);
+      showToast(`Workspace "${wsName}" deleted.`);
+      if (selectedWorkspace?.id === wsId) {
+        setSelectedWorkspace(null);
+        setDocuments([]);
+        setChatHistory([]);
+        setGraphNodes([]);
+      }
+      await loadWorkspaces();
+    } catch (err) {
+      showToast(err.message);
+    }
+  }
+
 
   async function handleSelectWorkspace(ws) {
     setSelectedWorkspace(ws);
@@ -348,9 +368,10 @@ export default function App() {
         <div className="main-layout">
           <WorkspaceAnalytics
             user={user}
-            workspace={selectedWorkspace}
-            graphNodes={graphNodes}
-            masteries={masteries}
+            workspaces={workspaces}
+            selectedWorkspace={selectedWorkspace}
+            onSelectWorkspace={(ws) => { handleSelectWorkspace(ws); setViewPage("workspace"); }}
+            onDeleteWorkspace={handleDeleteWorkspace}
             onBack={() => setViewPage("workspace")}
             onLogout={handleLogout}
           />
@@ -368,11 +389,29 @@ export default function App() {
               <div className="workspaces-grid">
                 {workspaces.map((ws) => (
                   <div key={ws.id} className="workspace-card" onClick={() => handleSelectWorkspace(ws)}>
-                    <div className="workspace-card-icon">
-                      <Layers size={24} style={{ color: "var(--accent)" }} />
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", width: "100%" }}>
+                      <div className="workspace-card-icon">
+                        <Layers size={22} style={{ color: "var(--accent)" }} />
+                      </div>
+                      <button
+                        className="workspace-card-delete-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteWorkspace(ws.id, ws.name);
+                        }}
+                        title="Delete workspace"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-                    <div className="workspace-card-name">{ws.name}</div>
-                    <div className="workspace-card-meta">Open →</div>
+
+                    <div className="workspace-card-name" style={{ marginTop: 8 }}>{ws.name}</div>
+                    
+                    <div className="workspace-card-progress-badge">
+                      🎯 Concepts Done: <strong>{ws.mastered_concepts || 0} / {ws.total_concepts || 0}</strong>
+                    </div>
+
+                    <div className="workspace-card-meta" style={{ marginTop: 10 }}>Open Workspace →</div>
                   </div>
                 ))}
               </div>
@@ -408,8 +447,10 @@ export default function App() {
               onFileClick={handleOpenFileTab}
               onAddFile={handleAddFile}
               onDeleteFile={handleDeleteFile}
+              onDeleteWorkspace={handleDeleteWorkspace}
               onLogout={handleLogout}
             />
+
 
             {/* Center: Tab Manager */}
             <TabManager

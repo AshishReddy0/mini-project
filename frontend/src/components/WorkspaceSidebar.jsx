@@ -24,6 +24,7 @@ export default function WorkspaceSidebar({
   onFileClick,
   onAddFile,
   onDeleteFile,
+  onDeleteWorkspace,
   onLogout,
 }) {
   const fileInputRef = useRef(null);
@@ -51,13 +52,26 @@ export default function WorkspaceSidebar({
 
   return (
     <aside className="workspace-sidebar">
-      {/* Top bar — back button + workspace name */}
-      <div className="sidebar-topbar">
-        <button className="back-btn" onClick={onBackClick} title="All Workspaces">
-          <ArrowLeft size={16} />
-        </button>
-        <span className="sidebar-workspace-name">{workspace.name}</span>
+      {/* Top bar — back button + workspace name + delete button */}
+      <div className="sidebar-topbar" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, overflow: "hidden" }}>
+          <button className="back-btn" onClick={onBackClick} title="All Workspaces">
+            <ArrowLeft size={16} />
+          </button>
+          <span className="sidebar-workspace-name">{workspace.name}</span>
+        </div>
+        {onDeleteWorkspace && (
+          <button
+            className="back-btn"
+            style={{ color: "#ef4444", padding: 4 }}
+            onClick={() => onDeleteWorkspace(workspace.id, workspace.name)}
+            title="Delete this workspace"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </div>
+
 
       <span className="sidebar-section-label">Materials</span>
 

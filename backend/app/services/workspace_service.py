@@ -7,7 +7,30 @@ from sqlalchemy.orm import Session
 
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.models.concept_graph import ConceptNode, NodeMastery
 from app.schemas.workspace import WorkspaceCreate, WorkspaceUpdate
+
+
+def populate_workspace_stats(db: Session, workspace: Workspace, user: User) -> Workspace:
+    """Attach concept stats to a workspace instance."""
+    total_concepts = (
+        db.query(ConceptNode)
+        .filter(ConceptNode.workspace_id == workspace.id)
+        .count()
+    )
+    mastered_concepts = (
+        db.query(NodeMastery)
+        .join(ConceptNode, NodeMastery.node_id == ConceptNode.id)
+        .filter(
+            ConceptNode.workspace_id == workspace.id,
+            NodeMastery.user_id == user.id,
+            NodeMastery.status == "mastered"
+        )
+        .count()
+    )
+    workspace.total_concepts = total_concepts
+    workspace.mastered_concepts = mastered_concepts
+    return workspace
 
 
 def get_workspace_for_user(db: Session, workspace_id: UUID, user: User) -> Workspace:
@@ -25,12 +48,16 @@ def get_workspace_for_user(db: Session, workspace_id: UUID, user: User) -> Works
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Workspace not found",
         )
-    return workspace
+    return populate_workspace_stats(db, workspace, user)
 
 
 def list_workspaces(db: Session, user: User) -> list[Workspace]:
-    """Return all workspaces owned by the user."""
-    return db.query(Workspace).filter(Workspace.user_id == user.id).all()
+    """Return all workspaces owned by the user with concept progress stats."""
+    workspaces = db.query(Workspace).filter(Workspace.user_id == user.id).all()
+    for ws in workspaces:
+        populate_workspace_stats(db, ws, user)
+    return workspaces
+
 
 
 def create_workspace(db: Session, user: User, data: WorkspaceCreate) -> Workspace:

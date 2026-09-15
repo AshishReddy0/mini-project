@@ -23,5 +23,8 @@ class WorkspaceResponse(BaseModel):
     description: str | None
     created_at: datetime
     updated_at: datetime
+    total_concepts: int = 0
+    mastered_concepts: int = 0
 
     model_config = {"from_attributes": True}
+

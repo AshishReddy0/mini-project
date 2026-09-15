@@ -539,31 +539,77 @@ export default function AnimatedRoadmap({
   function renderNodeCard(node, index) {
     const status = getMasteryStatus(node.id);
     const isActive = activeNodeId === node.id;
-    const isExpanded = expandedNodeId === node.id;
     const subPoints = node.sub_points || [];
-    const catTag = node.difficulty?.toUpperCase();
+    const difficulty = (node.difficulty || "medium").toLowerCase();
+
+    // Map difficulty color styles
+    const diffBadgeStyle = {
+      easy: { bg: "rgba(16, 185, 129, 0.15)", color: "#10b981", border: "rgba(16, 185, 129, 0.3)" },
+      medium: { bg: "rgba(245, 158, 11, 0.15)", color: "#f59e0b", border: "rgba(245, 158, 11, 0.3)" },
+      hard: { bg: "rgba(168, 85, 247, 0.15)", color: "#a855f7", border: "rgba(168, 85, 247, 0.3)" },
+    }[difficulty] || { bg: "rgba(99, 102, 241, 0.15)", color: "#6366f1", border: "rgba(99, 102, 241, 0.3)" };
+
+    const isMastered = status === "mastered";
 
     return (
       <div key={node.id} className="roadmap-node-wrapper">
         <div
-          className={`roadmap-node-card ${status} ${isActive ? "active" : ""}`}
+          className={`roadmap-node-card ${isMastered ? "mastered" : "unmastered"} ${isActive ? "active" : ""}`}
           onClick={() => handleNodeClick(node, index)}
-          title={`Open: ${node.title}`}
+          title={`Click to open reference answer for: ${node.title}`}
         >
-          <div className="node-status-circle" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
-            {status === "mastered" ? (
-              <CheckCircle size={14} style={{ color: "var(--success)" }} />
+          <div className="node-status-circle" style={{ display: "flex", alignItems: "center", justifyContent: "center", marginTop: 2 }}>
+            {isMastered ? (
+              <CheckCircle size={16} style={{ color: "var(--success)" }} />
             ) : (
-              <PlayCircle size={14} style={{ color: "var(--primary)" }} />
+              <PlayCircle size={16} style={{ color: isActive ? "var(--accent)" : "var(--primary)" }} />
             )}
           </div>
-          <div className="node-card-body">
-            <div className="node-card-title">{node.title}</div>
-            {status === "mastered" && (
-              <div className="node-card-sub" style={{ marginTop: 4 }}>
-                <span className="sub-count-badge" style={{ background: "rgba(16,185,129,0.25)", color: "#10b981", fontWeight: 700 }}>
+
+
+          <div className="node-card-body" style={{ flex: 1, minWidth: 0 }}>
+            {/* Header badges row: Unit Ref & Difficulty */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
+              {node.unit_ref && (
+                <span className="node-unit-tag" style={{ fontSize: "0.68rem", fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "rgba(255,255,255,0.07)", color: "var(--text-muted)", border: "1px solid var(--border-color)" }}>
+                  {node.unit_ref}
+                </span>
+              )}
+              <span className="node-diff-badge" style={{ fontSize: "0.65rem", fontWeight: 700, padding: "1px 6px", borderRadius: 4, textTransform: "uppercase", background: diffBadgeStyle.bg, color: diffBadgeStyle.color, border: `1px solid ${diffBadgeStyle.border}` }}>
+                {difficulty}
+              </span>
+              {status === "mastered" && (
+                <span className="node-mastered-tag" style={{ fontSize: "0.65rem", fontWeight: 700, padding: "1px 6px", borderRadius: 4, background: "rgba(16,185,129,0.2)", color: "#10b981", border: "1px solid rgba(16,185,129,0.4)" }}>
                   ✅ Mastered
                 </span>
+              )}
+            </div>
+
+            {/* Title */}
+            <div className="node-card-title" style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--text-main)", lineHeight: "1.3", marginBottom: 4 }}>
+              {node.title}
+            </div>
+
+            {/* Summary preview */}
+            {node.summary && (
+              <div className="node-card-summary" style={{ fontSize: "0.76rem", color: "var(--text-muted)", lineHeight: "1.35", marginBottom: 6, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                {node.summary}
+              </div>
+            )}
+
+            {/* Sub-points preview chips */}
+            {subPoints.length > 0 && (
+              <div className="node-subpoints-chips" style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 4 }}>
+                {subPoints.slice(0, 3).map((sp, i) => (
+                  <span key={i} className="node-subpoint-chip" style={{ fontSize: "0.68rem", padding: "1px 6px", borderRadius: 4, background: "rgba(99,102,241,0.08)", color: "var(--accent)", border: "1px solid rgba(99,102,241,0.18)" }}>
+                    • {sp.title || sp}
+                  </span>
+                ))}
+                {subPoints.length > 3 && (
+                  <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", alignSelf: "center" }}>
+                    +{subPoints.length - 3} more
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -571,4 +617,5 @@ export default function AnimatedRoadmap({
       </div>
     );
   }
+
 }

@@ -56,6 +56,9 @@ export const api = {
   listWorkspaces: () => apiFetch("/workspaces"),
   createWorkspace: (body) =>
     apiFetch("/workspaces", { method: "POST", body: JSON.stringify(body) }),
+  deleteWorkspace: (workspaceId) =>
+    apiFetch(`/workspaces/${workspaceId}`, { method: "DELETE" }),
+
 
   // Documents
   listDocuments: (workspaceId) =>

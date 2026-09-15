@@ -1221,52 +1221,44 @@ body {
   width: calc(100% - 24px);
   margin: 0 12px;
   padding: 12px 14px;
-  background: var(--node-locked);
-  border: 2px solid transparent;
-  border-radius: 10px;
-  cursor: default;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: 12px;
+  cursor: pointer;
+  opacity: 1 !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: flex-start;
   gap: 10px;
 }
 
-.roadmap-node-card.unlocked {
-  background: var(--node-unlocked);
-  border-color: var(--primary);
-  cursor: pointer;
-  box-shadow: 0 0 10px rgba(99,102,241,0.15);
-}
-
-.roadmap-node-card.unlocked:hover {
-  background: rgba(99,102,241,0.12);
-  transform: translateX(3px);
-  box-shadow: 0 4px 20px rgba(99,102,241,0.25);
+.roadmap-node-card:hover {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.08);
+  transform: translateX(4px);
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.2);
 }
 
 .roadmap-node-card.mastered {
-  background: rgba(16, 185, 129, 0.14) !important;
+  background: rgba(16, 185, 129, 0.1) !important;
   border: 1.5px solid var(--success) !important;
   cursor: pointer;
-  box-shadow: 0 0 14px rgba(16, 185, 129, 0.25) !important;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2) !important;
 }
 
 .roadmap-node-card.mastered:hover {
-  background: rgba(16, 185, 129, 0.22) !important;
-  transform: translateX(3px);
+  background: rgba(16, 185, 129, 0.18) !important;
+  transform: translateX(4px);
   box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35) !important;
 }
 
 .roadmap-node-card.active {
   transform: translateX(4px);
-  box-shadow: 0 4px 24px rgba(99,102,241,0.35) !important;
+  box-shadow: 0 4px 24px rgba(99, 102, 241, 0.35) !important;
   border-color: var(--accent) !important;
+  background: rgba(99, 102, 241, 0.12) !important;
 }
 
-.roadmap-node-card.locked {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 
 /* Node status indicator circle */
 .node-status-circle {
@@ -2403,6 +2395,74 @@ body {
 .unit-tabs-bar::-webkit-scrollbar-thumb:hover {
   background: var(--accent);
 }
+
+/* Landing & Profile Workspace Management Styles */
+.workspace-card-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.workspace-card-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.workspace-card-progress-badge {
+  font-size: 0.76rem;
+  color: var(--text-sub);
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-top: 6px;
+}
+
+.profile-workspace-row:hover {
+  border-color: var(--primary) !important;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.12);
+  transform: translateY(-1px);
+}
+
+/* Enhanced Roadmap Concept Cards */
+.roadmap-node-card {
+  width: calc(100% - 24px);
+  margin: 0 12px;
+  padding: 12px 14px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.roadmap-node-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.15);
+  transform: translateY(-1px);
+}
+
+.roadmap-node-card.active {
+  border-color: var(--accent) !important;
+  background: rgba(99, 102, 241, 0.08) !important;
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.25) !important;
+}
+
+.roadmap-node-card.mastered {
+  border-color: var(--success) !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
 
 
 
