@@ -1,6 +1,7 @@
 // API helper functions for calling the FastAPI backend
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const RAW_API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+const API_URL = RAW_API_URL.replace(/\/$/, "");
 
 export function getToken() {
   return localStorage.getItem("token");
@@ -24,19 +25,38 @@ async function apiFetch(path, options = {}) {
     headers["Content-Type"] = headers["Content-Type"] || "application/json";
   }
 
-  const response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  let response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { ...options, headers });
+  } catch (err) {
+    if (err.name === "TypeError" && err.message.includes("fetch")) {
+      throw new Error(
+        `Unable to connect to backend API (${API_URL}). Please check if backend is running or waking up on Render.`
+      );
+    }
+    throw err;
+  }
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+  }
 
   if (!response.ok) {
     let errorMessage = `Request failed (${response.status})`;
     if (data?.detail) {
       if (Array.isArray(data.detail)) {
-        errorMessage = data.detail.map(err => `${err.loc[err.loc.length - 1]}: ${err.msg}`).join(", ");
+        errorMessage = data.detail.map(err => `${err.loc?.[err.loc.length - 1] ?? "error"}: ${err.msg}`).join(", ");
       } else {
         errorMessage = data.detail;
       }
+    } else if (typeof data === "string") {
+      errorMessage = data;
     }
     throw new Error(errorMessage);
   }
