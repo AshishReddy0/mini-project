@@ -12,6 +12,8 @@ from app.database import Base
 
 
 class ChatRole(str, enum.Enum):
+    user = "user"
+    assistant = "assistant"
     USER = "user"
     ASSISTANT = "assistant"
 
@@ -28,7 +30,8 @@ class ChatHistory(Base):
         nullable=False,
     )
     role: Mapped[ChatRole] = mapped_column(
-        Enum(ChatRole, name="chat_role_enum"), nullable=False
+        Enum(ChatRole, name="chat_role_enum", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
     )
     message: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

@@ -12,6 +12,10 @@ from app.database import Base
 
 
 class ContentType(str, enum.Enum):
+    revision = "revision"
+    exam = "exam"
+    quiz = "quiz"
+    logic_flow = "logic_flow"
     REVISION = "revision"
     EXAM = "exam"
     QUIZ = "quiz"
@@ -30,7 +34,8 @@ class GeneratedContent(Base):
         nullable=False,
     )
     content_type: Mapped[ContentType] = mapped_column(
-        Enum(ContentType, name="content_type_enum"), nullable=False
+        Enum(ContentType, name="content_type_enum", values_callable=lambda obj: [e.value for e in obj]),
+        nullable=False,
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
