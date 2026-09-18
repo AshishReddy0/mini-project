@@ -13,16 +13,26 @@ from app.config import (
 
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# Older model IDs that Google/Groq have retired for new accounts
+# Known deprecated/decommissioned models to automatically filter out
+DEPRECATED_MODELS = {
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it",
+    "llama3-70b-8192",
+    "llama3-8b-8192",
+    "gemini-3.5-flash-lite",
+    "gemini-2.0-flash-lite",
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.6-27b",
+    "openai/gpt-oss-20b",
+}
+
 GEMINI_MODEL_FALLBACKS = [
     "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
 ]
 GROQ_MODEL_FALLBACKS = [
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
-    "llama3-70b-8192",
-    "llama3-8b-8192",
 ]
 
 _gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
@@ -40,7 +50,7 @@ def _unique_models(primary: str, fallbacks: list[str]) -> list[str]:
     ordered: list[str] = []
     for model in [primary, *fallbacks]:
         model = model.strip()
-        if model and model not in seen:
+        if model and model not in seen and model not in DEPRECATED_MODELS:
             seen.add(model)
             ordered.append(model)
     return ordered
@@ -50,7 +60,15 @@ def _is_model_unavailable_error(error: Exception) -> bool:
     msg = str(error).lower()
     return any(
         token in msg
-        for token in ("404", "not_found", "no longer available", "does not exist", "not found")
+        for token in (
+            "404",
+            "not_found",
+            "no longer available",
+            "does not exist",
+            "not found",
+            "decommissioned",
+            "model_decommissioned",
+        )
     )
 
 
