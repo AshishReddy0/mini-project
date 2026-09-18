@@ -24,6 +24,9 @@ export default function App() {
   // Page view state: 'workspace' | 'profile'
   const [viewPage, setViewPage] = useState("workspace");
 
+  // Auth checking indicator to avoid page flashing on reload
+  const [authChecking, setAuthChecking] = useState(() => !!getToken());
+
   // Focus Timer & Analytics
   const [focusSeconds, setFocusSeconds] = useState(0);
   const [graphNodes, setGraphNodes] = useState([]);
@@ -64,11 +67,32 @@ export default function App() {
 
   // ─── Session restore ────────────────────────────────────────────
   useEffect(() => {
-    if (getToken()) {
-      api.me()
-        .then((u) => { setUser(u); loadWorkspaces(); })
-        .catch(() => setToken(null));
+    const token = getToken();
+    if (!token) {
+      setAuthChecking(false);
+      return;
     }
+
+    const lastWsId = localStorage.getItem("last_workspace_id");
+
+    Promise.all([api.me(), api.listWorkspaces()])
+      .then(async ([u, wsList]) => {
+        setUser(u);
+        setWorkspaces(wsList);
+        if (lastWsId) {
+          const found = wsList.find((w) => w.id === lastWsId);
+          if (found) {
+            await handleSelectWorkspace(found);
+          }
+        }
+      })
+      .catch(() => {
+        setToken(null);
+        localStorage.removeItem("last_workspace_id");
+      })
+      .finally(() => {
+        setAuthChecking(false);
+      });
   }, []);
 
   // ─── Auth ───────────────────────────────────────────────────────
@@ -95,6 +119,7 @@ export default function App() {
 
   function handleLogout() {
     setToken(null);
+    localStorage.removeItem("last_workspace_id");
     setUser(null);
     setWorkspaces([]);
     setSelectedWorkspace(null);
@@ -154,6 +179,7 @@ export default function App() {
 
 
   async function handleSelectWorkspace(ws) {
+    localStorage.setItem("last_workspace_id", ws.id);
     setSelectedWorkspace(ws);
     setTabs([CHAT_TAB]);
     setActiveTabId("chat");
@@ -178,6 +204,7 @@ export default function App() {
   }
 
   function handleBackToWorkspaces() {
+    localStorage.removeItem("last_workspace_id");
     setSelectedWorkspace(null);
     setDocuments([]);
     setChatHistory([]);
@@ -188,7 +215,6 @@ export default function App() {
     setRoadmapExpanded(false);
     setRoadmapConfig(null);
     setGraphNodes([]);
-    setShowAnalyticsModal(false);
   }
 
   // ─── Documents ──────────────────────────────────────────────────
@@ -324,6 +350,17 @@ export default function App() {
 
 
   // ─── Render ──────────────────────────────────────────────────────
+  if (authChecking) {
+    return (
+      <div className="app-container" style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh" }}>
+        <div style={{ textAlign: "center" }}>
+          <div className="loading-spinner" style={{ width: 36, height: 36, margin: "0 auto 16px auto" }} />
+          <p style={{ color: "var(--text-secondary)", fontSize: "0.95rem" }}>Loading your workspace…</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       <header className="app-header">
