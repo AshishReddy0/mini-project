@@ -8,7 +8,12 @@ from sqlalchemy import DateTime, Enum, ForeignKey, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from typing import TYPE_CHECKING
+
 from app.database import Base
+
+if TYPE_CHECKING:
+    from app.models.workspace import Workspace
 
 
 class ChatRole(str, enum.Enum):
