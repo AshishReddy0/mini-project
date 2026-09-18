@@ -35,21 +35,23 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Allow the React dev server to call the API during local development / production
 allowed_origins_env = os.getenv("ALLOWED_ORIGINS")
-if allowed_origins_env:
+if allowed_origins_env and allowed_origins_env.strip() != "*":
     origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 else:
-    origins = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"https?://.*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 # Register all API route groups
 app.include_router(auth.router)

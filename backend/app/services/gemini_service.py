@@ -15,14 +15,15 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # Older model IDs that Google/Groq have retired for new accounts
 GEMINI_MODEL_FALLBACKS = [
-    "gemini-3.5-flash-lite",
     "gemini-2.0-flash",
-    "gemini-2.5-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
 ]
 GROQ_MODEL_FALLBACKS = [
-    "openai/gpt-oss-120b",
-    "qwen/qwen3.6-27b",
-    "openai/gpt-oss-20b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "mixtral-8x7b-32768",
+    "gemma2-9b-it",
 ]
 
 _gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
