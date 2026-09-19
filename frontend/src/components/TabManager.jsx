@@ -126,10 +126,10 @@ function ChatTabContent({ chatHistory, chatInput, setChatInput, handleSendChat, 
           </div>
         ) : (
           chatHistory.map((msg) => (
-            <div key={msg.id} className={`chat-message ${msg.role}`}>
-              <span className="message-role-label">{msg.role === "user" ? "You" : "Copilot"}</span>
+            <div key={msg.id} className={`chat-message ${msg.role?.toLowerCase()}`}>
+              <span className="message-role-label">{msg.role?.toLowerCase() === "user" ? "You" : "Copilot"}</span>
               <div className="message-bubble">
-                {msg.role === "assistant" ? (
+                {msg.role?.toLowerCase() === "assistant" ? (
                   <MarkdownRenderer content={msg.message} />
                 ) : (
                   msg.message
