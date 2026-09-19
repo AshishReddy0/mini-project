@@ -17,10 +17,9 @@ if TYPE_CHECKING:
 
 
 class ChatRole(str, enum.Enum):
-    user = "user"
-    assistant = "assistant"
-    USER = "user"
-    ASSISTANT = "assistant"
+    # Values must match the PostgreSQL chat_role_enum: USER and ASSISTANT (uppercase)
+    user = "USER"
+    assistant = "ASSISTANT"
 
 
 class ChatHistory(Base):

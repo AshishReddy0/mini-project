@@ -31,7 +31,7 @@ async function apiFetch(path, options = {}) {
   } catch (err) {
     if (err.name === "TypeError" && err.message.includes("fetch")) {
       throw new Error(
-        `Unable to connect to backend API (${API_URL}). Please check if backend is running or waking up on Render.`
+        `Unable to connect to backend API (${API_URL}). Make sure the backend server is running: cd backend && uvicorn app.main:app --reload`
       );
     }
     throw err;
