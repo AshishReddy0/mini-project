@@ -1,5 +1,5 @@
 import re
-
+import time
 import httpx
 from google import genai
 
@@ -15,32 +15,25 @@ GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 # Known deprecated/decommissioned models to automatically skip
 DEPRECATED_MODELS = {
-    "mixtral-8x7b-32768",
-    "gemma2-9b-it",
     "llama3-70b-8192",
     "llama3-8b-8192",
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
-    "gemini-2.0-flash",
-    "gemini-2.0-flash-lite",
-    "gemini-1.5-flash",
-    "gemini-1.5-pro",
 }
 
-# Verified active Gemini models for this API key
+# Verified active Gemini models for fallback
 GEMINI_MODEL_FALLBACKS = [
-    "gemini-3.5-flash",
     "gemini-2.5-flash",
-    "gemini-3.5-flash-lite",
     "gemini-2.5-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-pro",
 ]
 
-# Verified active Groq models for this API key
+# Verified active Groq models for fallback
 GROQ_MODEL_FALLBACKS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "qwen-2.5-32b",
+    "deepseek-r1-distill-llama-70b",
     "openai/gpt-oss-120b",
-    "openai/gpt-oss-20b",
-    "qwen/qwen3.8-27b",
-    "groq/compound-mini",
 ]
 
 _gemini_client = genai.Client(api_key=GEMINI_API_KEY) if GEMINI_API_KEY else None
@@ -64,18 +57,14 @@ def _unique_models(primary: str, fallbacks: list[str]) -> list[str]:
     return ordered
 
 
-def _is_model_unavailable_error(error: Exception) -> bool:
+def _is_retryable_error(error: Exception) -> bool:
     msg = str(error).lower()
     return any(
         token in msg
         for token in (
-            "404",
-            "not_found",
-            "no longer available",
-            "does not exist",
-            "not found",
-            "decommissioned",
-            "model_decommissioned",
+            "404", "429", "500", "502", "503", "504",
+            "rate_limit", "tokens", "high demand",
+            "unavailable", "temporarily", "not_found", "decommissioned"
         )
     )
 
@@ -85,7 +74,9 @@ def _generate_with_gemini(prompt: str) -> str:
         raise ValueError("GEMINI_API_KEY is not configured.")
 
     last_error: Exception | None = None
-    for model in _unique_models(GEMINI_MODEL, GEMINI_MODEL_FALLBACKS):
+    models_to_try = _unique_models(GEMINI_MODEL, GEMINI_MODEL_FALLBACKS)
+    
+    for attempt, model in enumerate(models_to_try):
         try:
             response = _gemini_client.models.generate_content(
                 model=model,
@@ -99,10 +90,11 @@ def _generate_with_gemini(prompt: str) -> str:
             return text.strip()
         except Exception as e:
             last_error = e
-            if _is_model_unavailable_error(e):
-                print(f"Gemini model unavailable ({model}): {e}")
-                continue
-            raise
+            print(f"Gemini attempt failed ({model}): {e}")
+            # If 503 or transient spike, pause briefly before next model
+            if "503" in str(e) or "unavailable" in str(e).lower():
+                time.sleep(1.5)
+            continue
 
     raise last_error or ValueError("No Gemini models available.")
 
@@ -123,7 +115,9 @@ def _generate_with_groq(prompt: str, expect_json: bool = False) -> str:
     messages.append({"role": "user", "content": prompt})
 
     last_error: Exception | None = None
-    for model in _unique_models(GROQ_MODEL, GROQ_MODEL_FALLBACKS):
+    models_to_try = _unique_models(GROQ_MODEL, GROQ_MODEL_FALLBACKS)
+
+    for attempt, model in enumerate(models_to_try):
         try:
             response = httpx.post(
                 GROQ_API_URL,
@@ -140,6 +134,9 @@ def _generate_with_groq(prompt: str, expect_json: bool = False) -> str:
             )
             if response.status_code >= 400:
                 detail = response.text.strip() or response.reason_phrase
+                # If rate limited (429), pause briefly before trying next model
+                if response.status_code == 429:
+                    time.sleep(1.5)
                 raise ValueError(f"HTTP {response.status_code}: {detail}")
 
             data = response.json()
@@ -151,12 +148,11 @@ def _generate_with_groq(prompt: str, expect_json: bool = False) -> str:
             return text.strip()
         except Exception as e:
             last_error = e
-            if _is_model_unavailable_error(e):
-                print(f"Groq model unavailable ({model}): {e}")
-                continue
-            raise
+            print(f"Groq attempt failed ({model}): {e}")
+            continue
 
     raise last_error or ValueError("No Groq models available.")
+
 
 
 def _provider_order() -> list[str]:
