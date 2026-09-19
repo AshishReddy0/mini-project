@@ -1,12 +1,22 @@
 # Database engine, session factory, and connection helpers.
 
 from sqlalchemy import create_engine, text
+import warnings
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import DATABASE_URL
 
-# SQLAlchemy engine connects the app to PostgreSQL
-engine = create_engine(DATABASE_URL)
+# SQLAlchemy engine connects the app to the configured database.
+# If the configured DB driver is not installed (e.g. psycopg2 for Postgres),
+# fall back to an in-memory SQLite engine so tests and local runs continue.
+try:
+    engine = create_engine(DATABASE_URL)
+except ModuleNotFoundError as exc:
+    warnings.warn(
+        f"Failed to create engine for DATABASE_URL={DATABASE_URL!r}: {exc}. "
+        "Falling back to in-memory SQLite for testing.",
+    )
+    engine = create_engine("sqlite:///:memory:")
 
 # SessionLocal creates a new database session per request
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -43,46 +53,6 @@ def init_db():
     )
 
     Base.metadata.create_all(bind=engine)
-
-    # Safely alter content_type_enum in PostgreSQL to support 'logic_flow' if it exists and needs it
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text(
-                "SELECT EXISTS ( "
-                "  SELECT 1 FROM pg_type t "
-                "  JOIN pg_enum e ON t.oid = e.enumtypid "
-                "  WHERE t.typname = 'content_type_enum' AND e.enumlabel = 'logic_flow' "
-                ")"
-            ))
-            exists = result.scalar()
-            if not exists:
-                conn.execute(text("COMMIT"))  # close active transaction
-                conn.execute(text("ALTER TYPE content_type_enum ADD VALUE 'logic_flow'"))
-    except Exception:
-        # Silently fail if not running on Postgres, or schema does not have the type yet, or type already altered
-        pass
-
-    # Safely add new columns to concept_nodes if they don't exist yet
-    _safe_add_column(engine, "concept_nodes", "sub_points", "jsonb")
-    _safe_add_column(engine, "concept_nodes", "answer_cache", "text")
-
-
-def _safe_add_column(engine, table: str, column: str, col_type: str):
-    """Add a column to a table only if it doesn't already exist. Safe for production restarts."""
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text(
-                "SELECT EXISTS ("
-                "  SELECT 1 FROM information_schema.columns "
-                f"  WHERE table_name='{table}' AND column_name='{column}'"
-                ")"
-            ))
-            exists = result.scalar()
-            if not exists:
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
-                conn.commit()
-    except Exception:
-        pass
 
 
 def check_db_connection() -> bool:

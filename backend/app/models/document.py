@@ -6,14 +6,9 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from typing import TYPE_CHECKING
+from typing import Optional
 
 from app.database import Base
-
-if TYPE_CHECKING:
-    from app.models.extracted_text import ExtractedText
-    from app.models.workspace import Workspace
 
 
 class Document(Base):
@@ -36,7 +31,7 @@ class Document(Base):
     )
 
     workspace: Mapped["Workspace"] = relationship("Workspace", back_populates="documents")
-    extracted_text: Mapped["ExtractedText | None"] = relationship(
+    extracted_text: Mapped[Optional["ExtractedText"]] = relationship(
         "ExtractedText",
         back_populates="document",
         uselist=False,
